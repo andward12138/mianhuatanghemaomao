@@ -1,0 +1,252 @@
+/* app.css */
+
+/* 设置背景颜色 */
+.root {
+    -fx-background-color: #2C3E50; /* 深色背景 */
+    -fx-font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* 设置字体 */
+    -fx-font-size: 14px;
+}
+
+/* 设置按钮的样式 */
+.button {
+    -fx-background-color: #34495E; /* 深灰色背景 */
+    -fx-text-fill: white; /* 白色文字 */
+    -fx-font-size: 14px;
+    -fx-border-radius: 4px; /* 圆角按钮 */
+    -fx-background-radius: 4px;
+    -fx-padding: 8 15 8 15; /* 内边距 */
+    -fx-cursor: hand; /* 鼠标悬停时显示手型 */
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.3), 3, 0.3, 1, 1); /* 按钮阴影效果 */
+}
+
+.button:hover {
+    -fx-background-color: #1ABC9C; /* 鼠标悬停时按钮背景颜色 */
+}
+
+.button:pressed {
+    -fx-background-color: #16A085; /* 按下时的颜色 */
+}
+
+/* 侧边栏按钮样式 */
+.sidebar-button {
+    -fx-background-color: #34495E; /* 深灰色背景 */
+    -fx-text-fill: white; /* 白色文字 */
+    -fx-font-size: 16px;
+    -fx-border-radius: 4px; /* 圆角按钮 */
+    -fx-background-radius: 4px;
+    -fx-padding: 12 15 12 15; /* 内边距 */
+    -fx-cursor: hand; /* 鼠标悬停时显示手型 */
+    -fx-alignment: center-left; /* 文字左对齐 */
+}
+
+.sidebar-button:hover {
+    -fx-background-color: #1ABC9C; /* 鼠标悬停时按钮背景颜色 */
+}
+
+.sidebar-button:pressed {
+    -fx-background-color: #16A085; /* 按下时的颜色 */
+}
+
+/* 设置TextArea的样式 */
+.text-area {
+    -fx-background-color: #FFFFFF;
+    -fx-text-fill: #2C3E50;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 5px;
+    -fx-font-size: 14px;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.2), 3, 0.3, 1, 1); /* TextArea阴影效果 */
+}
+
+.text-area .content {
+    -fx-background-color: #FFFFFF;
+}
+
+/* 设置VBox容器的样式 */
+.vbox {
+    -fx-padding: 10px;
+    -fx-spacing: 15px;
+}
+
+/* 文字效果 */
+.label {
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+}
+
+/* 聊天界面样式 */
+.scroll-pane {
+    -fx-background: #2C3E50;
+    -fx-border-color: #34495E;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.scroll-pane > .viewport {
+    -fx-background-color: #2C3E50;
+}
+
+.scroll-pane .scroll-bar:vertical {
+    -fx-background-color: #2C3E50;
+    -fx-padding: 0 0 0 0;
+}
+
+.scroll-pane .scroll-bar:vertical .thumb {
+    -fx-background-color: #1ABC9C;
+    -fx-background-radius: 4px;
+}
+
+.scroll-pane .scroll-bar:horizontal {
+    -fx-background-color: #2C3E50;
+    -fx-padding: 0 0 0 0;
+}
+
+.scroll-pane .scroll-bar:horizontal .thumb {
+    -fx-background-color: #1ABC9C;
+    -fx-background-radius: 4px;
+}
+
+/* 文本输入框样式 */
+.text-field {
+    -fx-background-color: #FFFFFF;
+    -fx-text-fill: #2C3E50;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 8px;
+    -fx-font-size: 14px;
+}
+
+/* 日期选择器样式 */
+.date-picker {
+    -fx-background-color: #FFFFFF;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.date-picker .arrow-button {
+    -fx-background-color: #1ABC9C;
+    -fx-background-radius: 0 4px 4px 0;
+}
+
+.date-picker .arrow-button:hover {
+    -fx-background-color: #16A085;
+}
+
+.date-picker .arrow-button .arrow {
+    -fx-background-color: white;
+}
+
+/* 列表视图样式 */
+.list-view {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 4px;
+    -fx-border-radius: 4px;
+    -fx-padding: 5px;
+}
+
+.list-cell {
+    -fx-background-color: #FFFFFF;
+    -fx-text-fill: #2C3E50;
+    -fx-padding: 8px;
+}
+
+.list-cell:filled:selected:focused, .list-cell:filled:selected {
+    -fx-background-color: #1ABC9C;
+    -fx-text-fill: white;
+}
+
+.list-cell:filled:hover {
+    -fx-background-color: #ECF0F1;
+    -fx-text-fill: #2C3E50;
+}
+
+/* 日记项样式 */
+.diary-item {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 4px;
+    -fx-border-radius: 4px;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.2), 3, 0.3, 1, 1);
+    -fx-padding: 10px;
+}
+
+/* 日记内容文本样式 */
+.diary-content {
+    -fx-text-fill: #2C3E50;
+    -fx-font-size: 14px;
+}
+
+/* 日记日期样式 */
+.diary-date {
+    -fx-text-fill: #7F8C8D;
+    -fx-font-size: 12px;
+}
+
+/* 日记标签样式 */
+.diary-tags {
+    -fx-text-fill: #3498DB;
+    -fx-font-size: 12px;
+    -fx-font-style: italic;
+}
+
+/* 删除按钮样式 */
+.delete-button {
+    -fx-background-color: #E74C3C;
+    -fx-text-fill: white;
+}
+
+.delete-button:hover {
+    -fx-background-color: #C0392B;
+}
+
+/* 编辑按钮样式 */
+.edit-button {
+    -fx-background-color: #3498DB;
+    -fx-text-fill: white;
+}
+
+.edit-button:hover {
+    -fx-background-color: #2980B9;
+}
+
+/* 对话框样式 */
+.dialog-pane {
+    -fx-background-color: #2C3E50;
+}
+
+.dialog-pane .label {
+    -fx-text-fill: white;
+}
+
+.dialog-label {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.dialog-pane:header .header-panel {
+    -fx-background-color: #34495E;
+}
+
+.dialog-pane:header .header-panel .label {
+    -fx-text-fill: white;
+    -fx-font-size: 16px;
+}
+
+/* 复选框样式 */
+.check-box {
+    -fx-text-fill: white;
+}
+
+.check-box .box {
+    -fx-background-color: white;
+    -fx-border-color: #1ABC9C;
+    -fx-border-radius: 3px;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: #1ABC9C;
+}
+
+.check-box:selected .box {
+    -fx-background-color: white;
+}
