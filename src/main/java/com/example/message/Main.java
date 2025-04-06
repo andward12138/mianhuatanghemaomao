@@ -78,39 +78,11 @@ public class Main extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        // 初始化数据库
+        // 初始化数据库（保留以维持兼容性，但不再使用）
         DBUtil.initializeDatabase();
         
-        // 显示数据库位置信息，方便排查问题
-        String dbPath = DBUtil.getDatabasePath();
-        System.out.println("应用程序使用的数据库路径: " + dbPath);
-        boolean isConnected = DBUtil.testConnection();
-        System.out.println("数据库连接状态: " + (isConnected ? "成功" : "失败"));
-        
-        // 在应用启动时弹出数据库路径提示
-        if (!":memory:".equals(dbPath)) {
-            Alert dbInfoAlert = new Alert(Alert.AlertType.INFORMATION);
-            dbInfoAlert.setTitle("数据库信息");
-            dbInfoAlert.setHeaderText("应用数据存储位置");
-            
-            VBox content = new VBox(5);
-            content.setPadding(new Insets(10));
-            
-            Label pathLabel = new Label("您的聊天数据存储在:");
-            Label locationLabel = new Label(dbPath);
-            locationLabel.setStyle("-fx-font-weight: bold;");
-            
-            Label statusLabel = new Label("数据库连接状态: " + (isConnected ? "正常" : "异常"));
-            statusLabel.setStyle("-fx-text-fill: " + (isConnected ? "green" : "red") + "; -fx-font-weight: bold;");
-            
-            Label infoLabel = new Label("如需备份，请复制此文件或整个data目录。");
-            infoLabel.setWrapText(true);
-            
-            content.getChildren().addAll(pathLabel, locationLabel, statusLabel, infoLabel);
-            
-            dbInfoAlert.getDialogPane().setContent(content);
-            dbInfoAlert.show();
-        }
+        // 输出数据库信息到控制台，但不再在UI上显示
+        System.out.println("注意：应用程序已转为使用云存储，本地数据库不再使用");
         
         // 初始化API服务
         com.example.message.services.ApiService.initialize();
@@ -121,7 +93,7 @@ public class Main extends Application {
         // 设置消息接收回调
         ChatService.setMessageReceivedCallback(this::handleReceivedMessage);
         
-        // 设置日记服务使用云存储
+        // 设置日记服务强制使用云存储
         DiaryService.setUseCloudStorage(true);
         
         // 主窗口设置
@@ -139,8 +111,8 @@ public class Main extends Application {
         // 创建设置菜单
         Menu settingsMenu = new Menu("设置");
         
-        // 添加数据库信息菜单项
-        addDatabaseInfoMenuItem(settingsMenu);
+        // 添加API服务器信息菜单项
+        addApiInfoMenuItem(settingsMenu);
         
         // 添加菜单到菜单栏
         menuBar.getMenus().add(settingsMenu);
@@ -1519,81 +1491,37 @@ public class Main extends Application {
         }
     }
 
-    // 添加一个菜单项显示数据库信息
-    private void addDatabaseInfoMenuItem(Menu settingsMenu) {
-        MenuItem dbInfoItem = new MenuItem("数据库信息");
-        dbInfoItem.setOnAction(e -> {
-            String dbPath = DBUtil.getDatabasePath();
-            boolean isConnected = DBUtil.testConnection();
-            
-            Alert dbInfoAlert = new Alert(Alert.AlertType.INFORMATION);
-            dbInfoAlert.setTitle("数据库信息");
-            dbInfoAlert.setHeaderText("应用数据存储位置");
+    // 显示API服务器信息对话框
+    private void addApiInfoMenuItem(Menu menu) {
+        MenuItem apiInfoItem = new MenuItem("API服务器信息");
+        apiInfoItem.setOnAction(e -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("API服务器信息");
+            alert.setHeaderText("云存储信息");
             
             VBox content = new VBox(5);
             content.setPadding(new Insets(10));
             
-            Label pathLabel = new Label("您的聊天数据存储在:");
-            Label locationLabel = new Label(dbPath);
-            locationLabel.setStyle("-fx-font-weight: bold;");
+            Label urlLabel = new Label("API服务器地址:");
+            Label serverUrl = new Label(com.example.message.services.ApiService.getApiUrl());
+            serverUrl.setStyle("-fx-font-weight: bold;");
             
-            Label statusLabel = new Label("数据库连接状态: " + (isConnected ? "正常" : "异常"));
-            statusLabel.setStyle("-fx-text-fill: " + (isConnected ? "green" : "red") + "; -fx-font-weight: bold;");
+            Label statusLabel = new Label("API服务器状态: " + 
+                (com.example.message.services.ApiService.isApiAvailable() ? "在线" : "离线"));
+            statusLabel.setStyle("-fx-text-fill: " + 
+                (com.example.message.services.ApiService.isApiAvailable() ? "green" : "red") + 
+                "; -fx-font-weight: bold;");
             
-            HBox actionsBox = new HBox(10);
-            actionsBox.setAlignment(Pos.CENTER);
+            Label infoLabel = new Label("所有数据将存储在云服务器上，无需担心本地数据库位置。");
+            infoLabel.setWrapText(true);
             
-            Button openFolderButton = new Button("打开数据目录");
-            openFolderButton.setOnAction(event -> {
-                try {
-                    File dbFile = new File(dbPath);
-                    File parentDir = dbFile.getParentFile();
-                    if (parentDir != null && parentDir.exists()) {
-                        Desktop.getDesktop().open(parentDir);
-                    } else {
-                        showError("错误", "数据目录不存在: " + (parentDir != null ? parentDir.getAbsolutePath() : "未知"));
-                    }
-                } catch (Exception ex) {
-                    showError("错误", "无法打开数据目录: " + ex.getMessage());
-                }
-            });
+            content.getChildren().addAll(urlLabel, serverUrl, statusLabel, infoLabel);
             
-            Button backupButton = new Button("备份数据库");
-            backupButton.setOnAction(event -> {
-                try {
-                    // 创建备份文件名
-                    String timestamp = LocalDateTime.now().format(
-                        DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-                    File dbFile = new File(dbPath);
-                    String backupPath = dbFile.getParent() + File.separator + "backup_" + timestamp + "_app.db";
-                    
-                    // 复制文件
-                    Files.copy(dbFile.toPath(), new File(backupPath).toPath());
-                    
-                    showInfo("备份成功", "已创建数据库备份:\n" + backupPath);
-                } catch (Exception ex) {
-                    showError("备份失败", "无法创建数据库备份: " + ex.getMessage());
-                }
-            });
-            
-            actionsBox.getChildren().addAll(openFolderButton, backupButton);
-            
-            content.getChildren().addAll(pathLabel, locationLabel, statusLabel, new Separator(), actionsBox);
-            
-            dbInfoAlert.getDialogPane().setContent(content);
-            dbInfoAlert.showAndWait();
+            alert.getDialogPane().setContent(content);
+            alert.show();
         });
         
-        settingsMenu.getItems().add(dbInfoItem);
-    }
-
-    // 显示信息对话框
-    private void showInfo(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        menu.getItems().add(apiInfoItem);
     }
 
     public static void main(String[] args) {

@@ -653,39 +653,12 @@ public class ChatService {
     
     // 保存消息到数据库
     public static void saveMessage(String sender, String receiver, String content) {
-        // 如果使用服务器模式，则通过ApiService保存消息
-        if (isUsingServerMode) {
-            // 尝试通过API保存消息
-            boolean success = ApiService.saveMessage(sender, receiver, content);
-            if (!success) {
-                System.out.println("通过API保存消息失败，尝试保存到本地数据库");
-                saveMessageToLocalDB(sender, receiver, content);
-            }
+        // 直接通过ApiService保存消息
+        boolean success = ApiService.saveMessage(sender, receiver, content);
+        if (!success) {
+            logger.warning("通过API保存消息失败，但不再尝试保存到本地数据库");
         } else {
-            // 使用本地数据库
-            saveMessageToLocalDB(sender, receiver, content);
-        }
-    }
-    
-    // 保存消息到本地数据库（作为备份方法）
-    private static void saveMessageToLocalDB(String sender, String receiver, String content) {
-        String timestamp = LocalDateTime.now().toString();
-        String insertSQL = "INSERT INTO chat_messages (sender, receiver, content, timestamp, is_read) VALUES (?, ?, ?, ?, ?)";
-        
-        try (Connection connection = DBUtil.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(insertSQL)) {
-            
-            preparedStatement.setString(1, sender);
-            preparedStatement.setString(2, receiver);
-            preparedStatement.setString(3, content);
-            preparedStatement.setString(4, timestamp);
-            preparedStatement.setInt(5, 0); // 未读
-            
-            preparedStatement.executeUpdate();
-            System.out.println("消息已保存到本地数据库: " + sender + " -> " + receiver + ": " + content);
-        } catch (SQLException e) {
-            System.out.println("保存消息到本地数据库时出错: " + e.getMessage());
-            e.printStackTrace();
+            logger.info("消息已成功保存到云端: " + sender + " -> " + receiver);
         }
     }
     
@@ -693,101 +666,39 @@ public class ChatService {
     public static List<ChatMessage> getChatHistory(String otherUser) {
         logger.info("获取与用户 " + otherUser + " 的完整聊天历史");
         
-        // 如果使用服务器模式，则通过ApiService获取聊天历史
-        if (isUsingServerMode) {
-            try {
-                // 尝试通过API获取聊天历史
-                List<ChatMessage> messages = ApiService.getChatHistory(currentUser, otherUser);
+        try {
+            // 直接通过API获取聊天历史
+            List<ChatMessage> messages = ApiService.getChatHistory(currentUser, otherUser);
+            
+            if (messages != null && !messages.isEmpty()) {
+                logger.info("成功从API获取 " + messages.size() + " 条聊天历史");
                 
-                if (messages != null && !messages.isEmpty()) {
-                    logger.info("成功从API获取 " + messages.size() + " 条聊天历史");
-                    
-                    // 确保所有消息都有正确的ID，避免重复显示问题
-                    for (ChatMessage msg : messages) {
-                        if (msg.getId() <= 0) {
-                            logger.warning("API返回的消息没有有效ID: " + msg.getContent());
-                        }
+                // 确保所有消息都有正确的ID，避免重复显示问题
+                for (ChatMessage msg : messages) {
+                    if (msg.getId() <= 0) {
+                        logger.warning("API返回的消息没有有效ID: " + msg.getContent());
                     }
-                    
-                    return messages;
-                } else {
-                    logger.warning("通过API获取聊天历史失败或为空，尝试从本地数据库获取");
-                    return getChatHistoryFromLocalDB(otherUser);
                 }
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "通过API获取聊天历史时出错: " + e.getMessage(), e);
-                return getChatHistoryFromLocalDB(otherUser);
-            }
-        } else {
-            // 使用本地数据库
-            return getChatHistoryFromLocalDB(otherUser);
-        }
-    }
-    
-    // 从本地数据库获取聊天历史（作为备份方法）
-    private static List<ChatMessage> getChatHistoryFromLocalDB(String otherUser) {
-        List<ChatMessage> messages = new ArrayList<>();
-        String selectSQL = "SELECT * FROM chat_messages WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?) ORDER BY timestamp ASC";
-        
-        try (Connection connection = DBUtil.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(selectSQL)) {
-            
-            logger.info("从本地数据库获取与用户 " + otherUser + " 的聊天历史");
-            preparedStatement.setString(1, currentUser);
-            preparedStatement.setString(2, otherUser);
-            preparedStatement.setString(3, otherUser);
-            preparedStatement.setString(4, currentUser);
-            
-            ResultSet resultSet = preparedStatement.executeQuery();
-            
-            while (resultSet.next()) {
-                int id = resultSet.getInt("id");
-                String sender = resultSet.getString("sender");
-                String receiver = resultSet.getString("receiver");
-                String content = resultSet.getString("content");
-                String timestamp = resultSet.getString("timestamp");
-                boolean isRead = resultSet.getInt("is_read") == 1;
                 
-                messages.add(new ChatMessage(id, sender, receiver, content, timestamp, isRead));
+                return messages;
+            } else {
+                logger.warning("通过API获取聊天历史失败或为空，返回空列表");
+                return new ArrayList<>();
             }
-            
-            logger.info("已从本地数据库加载与 " + otherUser + " 的聊天历史: " + messages.size() + " 条消息");
-        } catch (SQLException e) {
-            logger.log(Level.WARNING, "从本地数据库获取聊天历史时出错: " + e.getMessage(), e);
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "通过API获取聊天历史时出错: " + e.getMessage(), e);
+            return new ArrayList<>();
         }
-        
-        return messages;
     }
     
     // 标记消息为已读
     public static void markAsRead(int messageId) {
-        // 如果使用服务器模式，则通过ApiService标记消息为已读
-        if (isUsingServerMode) {
-            // 尝试通过API标记消息为已读
-            boolean success = ApiService.markAsRead(messageId);
-            if (!success) {
-                System.out.println("通过API标记消息为已读失败，尝试在本地数据库中标记");
-                markAsReadInLocalDB(messageId);
-            }
+        // 直接通过ApiService标记消息为已读
+        boolean success = ApiService.markAsRead(messageId);
+        if (!success) {
+            logger.warning("通过API标记消息" + messageId + "为已读失败");
         } else {
-            // 使用本地数据库
-            markAsReadInLocalDB(messageId);
-        }
-    }
-    
-    // 在本地数据库中标记消息为已读（作为备份方法）
-    private static void markAsReadInLocalDB(int messageId) {
-        String updateSQL = "UPDATE chat_messages SET is_read = 1 WHERE id = ?";
-        
-        try (Connection connection = DBUtil.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(updateSQL)) {
-            
-            preparedStatement.setInt(1, messageId);
-            preparedStatement.executeUpdate();
-            System.out.println("消息已在本地数据库中标记为已读: " + messageId);
-        } catch (SQLException e) {
-            System.out.println("在本地数据库中标记消息为已读时出错: " + e.getMessage());
-            e.printStackTrace();
+            logger.info("消息" + messageId + "已成功标记为已读");
         }
     }
     
@@ -944,9 +855,8 @@ public class ChatService {
                 serverWriter.flush();
                 logger.info("向服务器广播消息: " + formattedMessage);
                 
-                // 同时也保存到本地聊天记录
-                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                saveMessageToLocalDB(sender, "all", message);
+                // 保存消息到云端
+                ApiService.saveMessage(sender, "all", message);
                 
                 // 回显自己的消息
                 if (messageReceivedCallback != null) {
@@ -1045,96 +955,19 @@ public class ChatService {
     
     // 新方法：保存消息并返回生成的ID
     private static int saveMessageAndGetId(String sender, String receiver, String content, String tempId) {
-        // 如果使用服务器模式，则通过ApiService保存消息
-        if (isUsingServerMode) {
-            // 尝试通过API保存消息并获取ID
-            int messageId = ApiService.saveMessageAndGetId(sender, receiver, content);
-            if (messageId > 0) {
-                return messageId;
-            } else {
-                logger.warning("通过API保存消息失败，尝试保存到本地数据库");
-                return saveMessageToLocalDBAndGetId(sender, receiver, content);
-            }
+        // 直接通过ApiService保存消息并获取ID
+        int messageId = ApiService.saveMessageAndGetId(sender, receiver, content);
+        if (messageId > 0) {
+            return messageId;
         } else {
-            // 使用本地数据库
-            return saveMessageToLocalDBAndGetId(sender, receiver, content);
-        }
-    }
-    
-    // 保存消息到本地数据库并返回生成的ID
-    private static int saveMessageToLocalDBAndGetId(String sender, String receiver, String content) {
-        String timestamp = LocalDateTime.now().toString();
-        String insertSQL = "INSERT INTO chat_messages (sender, receiver, content, timestamp, is_read) VALUES (?, ?, ?, ?, ?)";
-        
-        try (Connection connection = DBUtil.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(insertSQL, Statement.RETURN_GENERATED_KEYS)) {
-            
-            preparedStatement.setString(1, sender);
-            preparedStatement.setString(2, receiver);
-            preparedStatement.setString(3, content);
-            preparedStatement.setString(4, timestamp);
-            preparedStatement.setInt(5, 0); // 未读
-            
-            int affectedRows = preparedStatement.executeUpdate();
-            if (affectedRows > 0) {
-                try (ResultSet generatedKeys = preparedStatement.getGeneratedKeys()) {
-                    if (generatedKeys.next()) {
-                        int id = generatedKeys.getInt(1);
-                        logger.info("消息已保存到本地数据库并获取ID: " + id);
-                        
-                        // 验证ID是否已经存在于数据库中，以确保唯一性
-                        try (PreparedStatement checkStmt = connection.prepareStatement(
-                                "SELECT COUNT(*) FROM chat_messages WHERE id = ? AND id != LAST_INSERT_ROWID()")) {
-                            checkStmt.setInt(1, id);
-                            ResultSet rs = checkStmt.executeQuery();
-                            if (rs.next() && rs.getInt(1) > 0) {
-                                logger.warning("检测到ID冲突: " + id + "，尝试使用替代ID");
-                                // 如果ID冲突，生成一个更大的ID
-                                try (PreparedStatement maxIdStmt = connection.prepareStatement(
-                                        "SELECT MAX(id) + 1 FROM chat_messages")) {
-                                    ResultSet maxRs = maxIdStmt.executeQuery();
-                                    if (maxRs.next()) {
-                                        id = Math.max(id + 1, maxRs.getInt(1));
-                                        // 更新消息记录为新ID
-                                        try (PreparedStatement updateStmt = connection.prepareStatement(
-                                                "UPDATE chat_messages SET id = ? WHERE ROWID = LAST_INSERT_ROWID()")) {
-                                            updateStmt.setInt(1, id);
-                                            updateStmt.executeUpdate();
-                                            logger.info("已解决ID冲突，新ID: " + id);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        return id;
-                    }
-                }
+            logger.warning("通过API保存消息失败，返回临时ID: " + tempId);
+            // 如果API失败，返回临时ID的整数值
+            try {
+                return Integer.parseInt(tempId);
+            } catch (NumberFormatException e) {
+                // 如果解析失败，返回当前时间的后5位作为临时ID
+                return (int)(System.currentTimeMillis() % 100000);
             }
-            
-            logger.warning("保存消息到本地数据库成功，但未获取到ID");
-            // 如果无法获取自动生成的ID，则尝试获取最后插入的记录ID
-            try (Statement stmt = connection.createStatement();
-                 ResultSet rs = stmt.executeQuery("SELECT last_insert_rowid()")) {
-                if (rs.next()) {
-                    int id = rs.getInt(1);
-                    logger.info("使用last_insert_rowid()获取到ID: " + id);
-                    return id;
-                }
-            } catch (SQLException e) {
-                logger.log(Level.WARNING, "无法获取last_insert_rowid()", e);
-            }
-            
-            // 生成一个随机的大ID，避免与已有ID冲突
-            int randomId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
-            logger.info("无法获取数据库生成的ID，使用替代ID: " + randomId);
-            return randomId;
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "保存消息到本地数据库时出错", e);
-            // 生成一个临时ID，以便UI可以显示消息
-            int tempId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
-            logger.info("由于数据库错误，使用临时ID: " + tempId);
-            return tempId;
         }
     }
 

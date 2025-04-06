@@ -23,18 +23,18 @@ public class DiaryService {
     private static final int READ_TIMEOUT = 30000; // 30秒
     private static final int MAX_RETRIES = 3; // 最大重试次数
     
-    // 是否使用云服务器存储日记
-    private static boolean useCloudStorage = false;
+    // 强制使用云服务器存储日记
+    private static final boolean useCloudStorage = true;
     
-    // 设置是否使用云存储
+    // 设置是否使用云存储 - 为了兼容现有代码，但总是返回true
     public static void setUseCloudStorage(boolean useCloud) {
-        useCloudStorage = useCloud;
-        logger.info("Cloud storage for diaries " + (useCloud ? "enabled" : "disabled"));
+        // 忽略参数，强制使用云存储
+        logger.info("Cloud storage for diaries is always enabled");
     }
     
-    // 获取是否使用云存储
+    // 获取是否使用云存储 - 始终返回true
     public static boolean isCloudStorageEnabled() {
-        return useCloudStorage;
+        return true;
     }
 
     // 添加日记
@@ -43,283 +43,107 @@ public class DiaryService {
         
         LocalDateTime now = LocalDateTime.now();
         
-        // 首先尝试保存到本地数据库
-        int diaryId = addDiaryToLocalDB(content, mood, now);
-        
-        if (diaryId <= 0) {
-            logger.severe("添加日记到本地数据库失败");
-            return -1;
-        }
-        
-        logger.info("日记已成功保存到本地数据库，ID=" + diaryId);
-        
-        // 如果启用了云存储，则同步到云端
-        if (useCloudStorage) {
-            try {
-                // 创建新的Diary对象用于同步到云端
-                Diary diary = new Diary(diaryId, content, mood, now);
-                
-                // 同步到云端（使用同步方式确保操作完成）
-                boolean syncSuccess = ApiService.saveDiary(diary);
-                
-                if (syncSuccess) {
-                    logger.info("日记ID=" + diaryId + "已成功同步到云端");
-                } else {
-                    logger.warning("日记ID=" + diaryId + "同步到云端失败，但已保存在本地");
+        try {
+            // 创建新的Diary对象用于发送到云端
+            Diary diary = new Diary(-1, content, mood, now);
+            
+            // 直接保存到云端
+            boolean success = ApiService.saveDiary(diary);
+            
+            if (success) {
+                logger.info("日记已成功保存到云端");
+                // 获取最新的日记列表，找出刚添加的日记
+                List<Diary> diaries = ApiService.getDiaries();
+                if (diaries != null && !diaries.isEmpty()) {
+                    // 找到最新添加的日记（通常是第一个）
+                    for (Diary d : diaries) {
+                        if (d.getContent().equals(content)) {
+                            logger.info("找到新添加的日记ID: " + d.getId());
+                            return d.getId();
+                        }
+                    }
                 }
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "同步日记到云端时出错，ID=" + diaryId, e);
-                // 失败不影响返回结果，本地保存已完成
+                // 如果找不到确切的ID，返回一个正数表示成功
+                return 1;
+            } else {
+                logger.severe("保存日记到云端失败");
+                return -1;
             }
-        } else {
-            logger.info("云存储未启用，日记仅保存在本地");
-        }
-        
-        return diaryId;
-    }
-    
-    // 添加日记到本地数据库
-    private static int addDiaryToLocalDB(String content, String mood, LocalDateTime timestamp) {
-        String date = timestamp.toLocalDate().toString();
-        String formattedTimestamp = timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        
-        logger.info("向本地数据库添加日记，日期=" + date + ", 时间戳=" + formattedTimestamp);
-        
-        try (Connection conn = DBUtil.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(
-                     "INSERT INTO diary_entries (content, tags, date, timestamp) VALUES (?, ?, ?, ?)",
-                     Statement.RETURN_GENERATED_KEYS)) {
-            
-            pstmt.setString(1, content);
-            pstmt.setString(2, mood); // 使用mood作为tags
-            pstmt.setString(3, date);
-            pstmt.setString(4, formattedTimestamp);
-            
-            int affectedRows = pstmt.executeUpdate();
-            if (affectedRows == 0) {
-                throw new SQLException("添加日记失败，没有行受影响。");
-            }
-            
-            try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
-                if (generatedKeys.next()) {
-                    return generatedKeys.getInt(1);
-                } else {
-                    throw new SQLException("添加日记失败，未获取到ID。");
-                }
-            }
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "添加日记到本地数据库出错", e);
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "保存日记时出错", e);
             return -1;
         }
     }
     
-    // 更新日记内容 - 统一的更新方法
+    // 更新日记内容
     public static boolean updateDiary(int id, String content, String mood) {
-        try (Connection conn = DBUtil.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(
-                     "UPDATE diary_entries SET content = ?, tags = ? WHERE id = ?")) {
-            
-            pstmt.setString(1, content);
-            pstmt.setString(2, mood); // 使用mood作为tags
-            pstmt.setInt(3, id);
-            
-            int affectedRows = pstmt.executeUpdate();
-            
-            // 如果启用云存储，则同步到云端
-            if (affectedRows > 0 && useCloudStorage) {
-                Diary diary = getDiaryById(id);
-                if (diary != null) {
-                    ApiService.updateDiary(diary);
-                    logger.info("Diary ID " + id + " update synced to cloud");
-                }
+        try {
+            // 获取日记详情
+            Diary diary = getDiaryById(id);
+            if (diary == null) {
+                logger.warning("未找到ID为 " + id + " 的日记");
+                return false;
             }
             
-            return affectedRows > 0;
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Error updating diary", e);
+            // 更新内容和心情
+            diary.setContent(content);
+            diary.setMood(mood);
+            
+            // 直接更新到云端
+            boolean success = ApiService.updateDiary(diary);
+            logger.info("日记ID " + id + " 更新" + (success ? "成功" : "失败"));
+            return success;
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "更新日记时出错", e);
             return false;
         }
     }
     
     // 删除日记
     public static boolean deleteDiary(int id) {
-        try (Connection conn = DBUtil.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(
-                     "DELETE FROM diary_entries WHERE id = ?")) {
-            
-            pstmt.setInt(1, id);
-            
-            // 如果启用云存储，则同步到云端
-            if (useCloudStorage) {
-                ApiService.deleteDiary(id);
-                logger.info("Diary ID " + id + " deletion synced to cloud");
-            }
-            
-            int affectedRows = pstmt.executeUpdate();
-            return affectedRows > 0;
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Error deleting diary", e);
+        try {
+            // 直接从云端删除
+            boolean success = ApiService.deleteDiary(id);
+            logger.info("日记ID " + id + " 删除" + (success ? "成功" : "失败"));
+            return success;
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "删除日记时出错", e);
             return false;
         }
     }
     
     // 获取指定ID的日记
     public static Diary getDiaryById(int id) {
-        try (Connection conn = DBUtil.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(
-                     "SELECT id, content, tags, date, timestamp FROM diary_entries WHERE id = ?")) {
-            
-            pstmt.setInt(1, id);
-            
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return new Diary(
-                        rs.getInt("id"),
-                        rs.getString("date"),
-                        rs.getString("content"),
-                        rs.getString("timestamp"),
-                        rs.getString("tags")
-                    );
+        // 从云端获取所有日记
+        List<Diary> diaries = ApiService.getDiaries();
+        if (diaries != null) {
+            // 查找指定ID的日记
+            for (Diary diary : diaries) {
+                if (diary.getId() == id) {
+                    return diary;
                 }
             }
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Error getting diary by ID", e);
         }
+        logger.warning("未找到ID为 " + id + " 的日记");
         return null;
     }
     
-    // 获取所有日记
+    // 获取所有日记 - 直接从云端获取
     public static List<Diary> getAllDiaries() {
-        if (useCloudStorage) {
-            // 尝试通过API获取所有日记
-            List<Diary> diaries = getAllDiariesFromCloud();
-            if (diaries != null && !diaries.isEmpty()) {
-                return diaries;
-            } else {
-                logger.warning("通过API获取日记失败或为空，将从本地数据库获取");
-                return getAllDiariesFromLocalDB();
-            }
+        logger.info("从云端获取所有日记");
+        List<Diary> diaries = ApiService.getDiaries();
+        if (diaries != null) {
+            logger.info("从云端获取到 " + diaries.size() + " 条日记");
+            return diaries;
         } else {
-            // 使用本地数据库
-            return getAllDiariesFromLocalDB();
+            logger.warning("从云端获取日记失败，返回空列表");
+            return new ArrayList<>();
         }
     }
     
-    // 从云服务器获取所有日记
-    private static List<Diary> getAllDiariesFromCloud() {
-        logger.info("尝试通过API获取所有日记");
-        
-        List<Diary> diaries = new ArrayList<>();
-        
-        try {
-            // 构建URL
-            URL url = new URL(API_BASE_URL + "/diaries");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setRequestProperty("Accept", "application/json");
-            conn.setConnectTimeout(CONNECT_TIMEOUT);
-            conn.setReadTimeout(READ_TIMEOUT);
-            
-            int responseCode = conn.getResponseCode();
-            if (responseCode >= 200 && responseCode < 300) {
-                // 读取响应
-                StringBuilder response = new StringBuilder();
-                try (BufferedReader br = new BufferedReader(
-                        new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        response.append(line);
-                    }
-                }
-                
-                // 解析JSON
-                String jsonStr = response.toString();
-                logger.info("通过API获取到日记，响应长度: " + jsonStr.length() + " 字节");
-                
-                // 简单解析JSON数组
-                if (jsonStr.startsWith("[") && jsonStr.endsWith("]")) {
-                    String[] items = jsonStr.substring(1, jsonStr.length() - 1).split("\\},\\{");
-                    logger.info("解析到 " + items.length + " 条日记");
-                    
-                    for (int i = 0; i < items.length; i++) {
-                        String item = items[i];
-                        if (i == 0) item = item.startsWith("{") ? item : "{" + item;
-                        if (i == items.length - 1) item = item.endsWith("}") ? item : item + "}";
-                        else item = "{" + item + "}";
-                        
-                        // 提取字段
-                        int id = extractIntField(item, "id");
-                        String date = extractStringField(item, "date");
-                        String content = extractStringField(item, "content");
-                        String timestamp = extractStringField(item, "timestamp");
-                        String tags = extractStringField(item, "tags");
-                        
-                        diaries.add(new Diary(id, date, content, timestamp, tags));
-                    }
-                }
-            } else {
-                logger.severe("获取日记失败: " + responseCode + " - " + conn.getResponseMessage());
-            }
-        } catch (Exception e) {
-            logger.severe("获取日记时发生异常: " + e.getMessage());
-            e.printStackTrace();
-        }
-        
-        return diaries;
-    }
-    
-    // 从本地数据库获取所有日记
-    private static List<Diary> getAllDiariesFromLocalDB() {
-        List<Diary> diaries = new ArrayList<>();
-        String selectSQL = "SELECT id, date, content, timestamp, tags FROM diary_entries ORDER BY timestamp DESC"; // 按时间排序
-
-        try (Connection connection = DBUtil.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery(selectSQL)) {
-
-            // 遍历结果集，获取所有日记
-            while (resultSet.next()) {
-                int id = resultSet.getInt("id");
-                String date = resultSet.getString("date");
-                String content = resultSet.getString("content");
-                String timestamp = resultSet.getString("timestamp");
-                String tags = resultSet.getString("tags");
-
-                // 创建Diary对象并添加到列表
-                diaries.add(new Diary(id, date, content, timestamp, tags));
-            }
-            
-            logger.info("从本地数据库获取到 " + diaries.size() + " 条日记");
-        } catch (SQLException e) {
-            logger.severe("获取本地日记时出错: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        return diaries;
-    }
-    
-    // 根据关键词和日期过滤日记
+    // 根据关键词和日期过滤日记 - 直接从云端搜索
     public static List<Diary> searchDiaries(String keyword, String startDate, String endDate) {
-        if (useCloudStorage) {
-            // 尝试通过API搜索日记
-            List<Diary> diaries = searchDiariesFromCloud(keyword, startDate, endDate);
-            if (diaries != null && !diaries.isEmpty()) {
-                return diaries;
-            } else {
-                logger.warning("通过API搜索日记失败或为空，将从本地数据库搜索");
-                return searchDiariesFromLocalDB(keyword, startDate, endDate);
-            }
-        } else {
-            // 使用本地数据库
-            return searchDiariesFromLocalDB(keyword, startDate, endDate);
-        }
-    }
-    
-    // 从云服务器搜索日记
-    private static List<Diary> searchDiariesFromCloud(String keyword, String startDate, String endDate) {
-        logger.info("尝试通过API搜索日记");
-        
-        List<Diary> diaries = new ArrayList<>();
+        logger.info("从云端搜索日记，关键词=" + keyword + ", 开始日期=" + startDate + ", 结束日期=" + endDate);
         
         try {
             // 构建URL
@@ -351,6 +175,7 @@ public class DiaryService {
             conn.setConnectTimeout(CONNECT_TIMEOUT);
             conn.setReadTimeout(READ_TIMEOUT);
             
+            List<Diary> diaries = new ArrayList<>();
             int responseCode = conn.getResponseCode();
             if (responseCode >= 200 && responseCode < 300) {
                 // 读取响应
@@ -391,66 +216,13 @@ public class DiaryService {
             } else {
                 logger.severe("搜索日记失败: " + responseCode + " - " + conn.getResponseMessage());
             }
+            
+            return diaries;
         } catch (Exception e) {
             logger.severe("搜索日记时发生异常: " + e.getMessage());
             e.printStackTrace();
+            return new ArrayList<>();
         }
-        
-        return diaries;
-    }
-    
-    // 从本地数据库搜索日记
-    private static List<Diary> searchDiariesFromLocalDB(String keyword, String startDate, String endDate) {
-        List<Diary> diaries = new ArrayList<>();
-        String selectSQL = "SELECT id, date, content, timestamp, tags FROM diary_entries WHERE (content LIKE ? OR tags LIKE ?)";
-
-        // 添加日期范围筛选条件
-        if (startDate != null && !startDate.isEmpty()) {
-            selectSQL += " AND date >= ?";
-        }
-        if (endDate != null && !endDate.isEmpty()) {
-            selectSQL += " AND date <= ?";
-        }
-
-        selectSQL += " ORDER BY timestamp DESC"; // 按时间排序
-
-        try (Connection connection = DBUtil.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(selectSQL)) {
-
-            String searchKey = keyword != null ? "%" + keyword + "%" : "%%";
-            preparedStatement.setString(1, searchKey);
-            preparedStatement.setString(2, searchKey);
-
-            // 设置日期范围条件
-            int paramIndex = 3;
-            if (startDate != null && !startDate.isEmpty()) {
-                preparedStatement.setString(paramIndex++, startDate);
-            }
-            if (endDate != null && !endDate.isEmpty()) {
-                preparedStatement.setString(paramIndex, endDate);
-            }
-
-            ResultSet resultSet = preparedStatement.executeQuery();
-
-            // 遍历结果集，获取过滤后的日记
-            while (resultSet.next()) {
-                int id = resultSet.getInt("id");
-                String date = resultSet.getString("date");
-                String content = resultSet.getString("content");
-                String timestamp = resultSet.getString("timestamp");
-                String tags = resultSet.getString("tags");
-
-                // 创建Diary对象并添加到列表
-                diaries.add(new Diary(id, date, content, timestamp, tags));
-            }
-            
-            logger.info("从本地数据库搜索到 " + diaries.size() + " 条日记");
-        } catch (SQLException e) {
-            logger.severe("搜索本地日记时出错: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        return diaries;
     }
     
     // 辅助方法：从JSON字符串中提取字符串字段
@@ -475,47 +247,8 @@ public class DiaryService {
         return 0;
     }
 
-    // 从云端刷新日记
+    // 从云端刷新日记 - 为了兼容性保留，但功能已不需要
     public static void refreshFromCloud() {
-        if (!useCloudStorage) {
-            logger.warning("Attempted to refresh diaries from cloud, but cloud storage is disabled");
-            return;
-        }
-        
-        try {
-            // 从API服务获取日记
-            List<Diary> cloudDiaries = ApiService.getDiaries();
-            if (cloudDiaries != null && !cloudDiaries.isEmpty()) {
-                // 清空本地数据库中的日记
-                try (Connection conn = DBUtil.getConnection();
-                     Statement stmt = conn.createStatement()) {
-                    stmt.executeUpdate("DELETE FROM diary_entries");
-                    logger.info("Deleted all local diaries before sync");
-                }
-                
-                // 插入云端获取的日记
-                for (Diary diary : cloudDiaries) {
-                    try (Connection conn = DBUtil.getConnection();
-                         PreparedStatement pstmt = conn.prepareStatement(
-                                 "INSERT INTO diary_entries (id, content, tags, date, timestamp) VALUES (?, ?, ?, ?, ?)")) {
-                        
-                        String timestamp = diary.getDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                        String date = diary.getDate().toLocalDate().toString();
-                        
-                        pstmt.setInt(1, diary.getId());
-                        pstmt.setString(2, diary.getContent());
-                        pstmt.setString(3, diary.getMood()); // 使用mood作为tags
-                        pstmt.setString(4, date);
-                        pstmt.setString(5, timestamp);
-                        pstmt.executeUpdate();
-                    }
-                }
-                logger.info("Successfully synced " + cloudDiaries.size() + " diaries from cloud");
-            } else {
-                logger.info("No diaries found in cloud to sync");
-            }
-        } catch (Exception e) {
-            logger.log(Level.SEVERE, "Error refreshing diaries from cloud", e);
-        }
+        logger.info("刷新日记功能调用 - 不需要额外操作，日记始终从云端获取");
     }
 }

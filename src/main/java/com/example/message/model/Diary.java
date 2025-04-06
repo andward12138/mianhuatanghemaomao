@@ -77,6 +77,14 @@ public class Diary {
         return mood;
     }
     
+    public void setContent(String content) {
+        this.content = content;
+    }
+    
+    public void setMood(String mood) {
+        this.mood = mood;
+    }
+    
     @Override
     public String toString() {
         return "Diary{" +
