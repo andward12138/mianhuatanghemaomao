@@ -109,7 +109,7 @@ public class ChatServer {
     private static void broadcastUserList() {
         StringBuilder userList = new StringBuilder("USERS");
         for (String username : clients.keySet()) {
-            userList.append("|").append(username);
+            userList.append(":").append(username);
         }
         
         String message = userList.toString();
@@ -175,94 +175,61 @@ public class ChatServer {
         private void processMessage(String message) {
             log("收到消息: " + message);
             
-            String[] parts = message.split("\\|");
-            if (parts.length < 1) return;
-            
-            String command = parts[0];
-            
-            try {
-                switch (command) {
-                    case "LOGIN":
-                        if (parts.length >= 2) {
-                            username = parts[1];
-                            // 检查用户名是否已存在
-                            if (clients.containsKey(username)) {
-                                sendMessage("ERROR|用户名 " + username + " 已被使用，请选择其他用户名");
-                                username = null;
-                            } else {
-                                clients.put(username, this);
-                                log("用户 " + username + " 已登录");
-                                sendMessage("LOGIN_SUCCESS|" + username);
-                                broadcastUserList();
-                            }
-                        }
-                        break;
-                        
-                    case "LOGOUT":
-                        if (parts.length >= 2) {
-                            String user = parts[1];
-                            if (user.equals(username)) {
-                                clients.remove(user);
-                                log("用户 " + user + " 已登出");
-                                broadcastUserList();
-                            }
-                        }
-                        break;
-                        
-                    case "MESSAGE":
-                        if (parts.length >= 4) {
-                            String sender = parts[1];
-                            String receiver = parts[2];
-                            String content = parts[3];
-                            
-                            // 验证发送者身份
-                            if (!sender.equals(username)) {
-                                log("消息发送者身份验证失败: " + sender + " != " + username);
-                                sendMessage("ERROR|发送者身份验证失败");
-                                return;
-                            }
-                            
-                            log("转发消息: " + sender + " -> " + receiver + ": " + content);
-                            
-                            // 转发消息给接收者
-                            ClientHandler receiverHandler = clients.get(receiver);
-                            if (receiverHandler != null) {
-                                receiverHandler.sendMessage("MESSAGE|" + sender + "|" + receiver + "|" + content);
-                                // 发送确认消息给发送者
-                                sendMessage("MESSAGE_SENT|" + receiver);
-                            } else {
-                                // 接收者不在线，发送错误消息给发送者
-                                log("接收者 " + receiver + " 不在线");
-                                sendMessage("ERROR|用户 " + receiver + " 不在线");
-                            }
-                        }
-                        break;
-                        
-                    case "GET_USERS":
-                        // 发送在线用户列表
-                        StringBuilder userList = new StringBuilder("USERS");
-                        for (String user : clients.keySet()) {
-                            if (!user.equals(username)) {  // 不包括自己
-                                userList.append("|").append(user);
-                            }
-                        }
-                        sendMessage(userList.toString());
-                        break;
-                        
-                    case "PING":
-                        // 心跳检测
-                        sendMessage("PONG");
-                        break;
-                        
-                    default:
-                        log("未知命令: " + command);
-                        sendMessage("ERROR|未知命令: " + command);
-                        break;
+            if (message.startsWith("LOGIN:")) {
+                // 处理登录请求
+                username = message.substring(6);
+                // 检查用户名是否已存在
+                if (clients.containsKey(username)) {
+                    sendMessage("ERROR:用户名 " + username + " 已被使用，请选择其他用户名");
+                    username = null;
+                } else {
+                    clients.put(username, this);
+                    log("用户 " + username + " 已登录");
+                    sendMessage("LOGIN_SUCCESS");
+                    broadcastUserList();
                 }
-            } catch (Exception e) {
-                log("处理消息时出错: " + e.getMessage());
-                e.printStackTrace();
-                sendMessage("ERROR|服务器内部错误");
+            } 
+            else if (message.startsWith("LOGOUT:")) {
+                // 处理登出请求
+                String user = message.substring(7);
+                if (user.equals(username)) {
+                    clients.remove(user);
+                    log("用户 " + user + " 已登出");
+                    broadcastUserList();
+                }
+            }
+            else if (message.startsWith("MSG:")) {
+                // 处理消息发送请求
+                String content = message.substring(4);
+                
+                log("转发消息: " + username + " -> all: " + content);
+                
+                // 转发消息给所有用户(广播)
+                String timestamp = dateFormat.format(new Date());
+                String broadcastMsg = "MSG:" + username + ":" + content + ":" + timestamp;
+                
+                for (ClientHandler handler : clients.values()) {
+                    if (!handler.username.equals(username)) { // 不发给自己
+                        handler.sendMessage(broadcastMsg);
+                    }
+                }
+            }
+            else if (message.equals("GET_USERS")) {
+                // 发送在线用户列表
+                StringBuilder userList = new StringBuilder("USERS:");
+                List<String> usernames = new ArrayList<>(clients.keySet());
+                usernames.remove(username); // 移除自己
+                userList.append(String.join(",", usernames));
+                
+                sendMessage(userList.toString());
+            }
+            else if (message.equals("HEARTBEAT")) {
+                // 心跳检测
+                sendMessage("HEARTBEAT_ACK");
+            }
+            else {
+                log("未知命令: " + message);
+                sendMessage("ERROR:未知命令");
             }
         }
         

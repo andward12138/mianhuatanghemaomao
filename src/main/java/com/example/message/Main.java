@@ -26,10 +26,29 @@ import javafx.animation.KeyValue;
 import javafx.animation.Interpolator;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.shape.Circle;
+import javafx.scene.input.KeyCode;
+import javafx.scene.text.Text;
+import javafx.scene.Node;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.ArrayList;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.HashSet;
+import java.io.File;
+import java.awt.Desktop;
+import java.nio.file.Files;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Main extends Application {
 
@@ -45,11 +64,53 @@ public class Main extends Application {
     private ListView<String> onlineUsersListView; // 在线用户列表
     private boolean isServerMode = false; // 是否使用服务器模式
     private ObservableList<String> onlineUsers = FXCollections.observableArrayList(); // 在线用户列表数据
+    private StackPane mainContent; // 主内容区
+    private VBox chatMessages; // 聊天消息容器
+    private ChatService chatClient; // 聊天客户端服务
+    private ChatService chatServer; // 聊天服务器
+    private String connectionStatus = "未连接"; // 连接状态
+    private int currentDiaryId = -1; // 当前编辑的日记ID
+    private TextArea diaryContentArea; // 日记内容文本区域
+    private ComboBox<String> moodSelector; // 心情选择器
+    private Map<String, Runnable> messageCallbacks = new HashMap<>();
+    private Timeline chatRefreshTimer;
+    private Set<Integer> displayedMessageIds = new HashSet<>();
 
     @Override
     public void start(Stage primaryStage) {
         // 初始化数据库
         DBUtil.initializeDatabase();
+        
+        // 显示数据库位置信息，方便排查问题
+        String dbPath = DBUtil.getDatabasePath();
+        System.out.println("应用程序使用的数据库路径: " + dbPath);
+        boolean isConnected = DBUtil.testConnection();
+        System.out.println("数据库连接状态: " + (isConnected ? "成功" : "失败"));
+        
+        // 在应用启动时弹出数据库路径提示
+        if (!":memory:".equals(dbPath)) {
+            Alert dbInfoAlert = new Alert(Alert.AlertType.INFORMATION);
+            dbInfoAlert.setTitle("数据库信息");
+            dbInfoAlert.setHeaderText("应用数据存储位置");
+            
+            VBox content = new VBox(5);
+            content.setPadding(new Insets(10));
+            
+            Label pathLabel = new Label("您的聊天数据存储在:");
+            Label locationLabel = new Label(dbPath);
+            locationLabel.setStyle("-fx-font-weight: bold;");
+            
+            Label statusLabel = new Label("数据库连接状态: " + (isConnected ? "正常" : "异常"));
+            statusLabel.setStyle("-fx-text-fill: " + (isConnected ? "green" : "red") + "; -fx-font-weight: bold;");
+            
+            Label infoLabel = new Label("如需备份，请复制此文件或整个data目录。");
+            infoLabel.setWrapText(true);
+            
+            content.getChildren().addAll(pathLabel, locationLabel, statusLabel, infoLabel);
+            
+            dbInfoAlert.getDialogPane().setContent(content);
+            dbInfoAlert.show();
+        }
         
         // 初始化API服务
         com.example.message.services.ApiService.initialize();
@@ -60,27 +121,65 @@ public class Main extends Application {
         // 设置消息接收回调
         ChatService.setMessageReceivedCallback(this::handleReceivedMessage);
         
-        // 创建可收缩侧边栏
+        // 设置日记服务使用云存储
+        DiaryService.setUseCloudStorage(true);
+        
+        // 主窗口设置
+        primaryStage.setTitle("棉花糖和猫猫的小屋");
+        primaryStage.setMinWidth(1000);
+        primaryStage.setMinHeight(700);
+        
+        // 创建主布局（使用BorderPane更适合响应式布局）
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("main-container");
+        
+        // 创建菜单栏
+        MenuBar menuBar = new MenuBar();
+        
+        // 创建设置菜单
+        Menu settingsMenu = new Menu("设置");
+        
+        // 添加数据库信息菜单项
+        addDatabaseInfoMenuItem(settingsMenu);
+        
+        // 添加菜单到菜单栏
+        menuBar.getMenus().add(settingsMenu);
+        
+        // 创建侧边栏
         VBox sidebar = createSidebar();
-
-        // 创建右侧内容区域（聊天或心情日记）
-        StackPane content = new StackPane();
-
+        
+        // 创建主内容区域
+        mainContent = new StackPane();
+        mainContent.getStyleClass().add("main-content");
+        mainContent.setPadding(new Insets(15));
+        
+        // 创建垂直布局以容纳菜单栏和主内容
+        VBox centerContent = new VBox();
+        centerContent.getChildren().addAll(menuBar, mainContent);
+        VBox.setVgrow(mainContent, Priority.ALWAYS);
+        
+        // 添加侧边栏和主内容区到根布局
+        root.setLeft(sidebar);
+        root.setCenter(centerContent);
+        
         // 设置初始内容为心情日记界面
-        openDiary(content);
-
-        // 主界面布局（侧边栏 + 内容区域）
-        HBox root = new HBox();
-        root.getChildren().addAll(sidebar, content);
-
+        openDiary();
+        
+        // 设置新消息通知回调
+        ChatService.setNewMessageNotificationCallback(sender -> {
+            System.out.println("收到来自 " + sender + " 的新消息通知");
+            // 查找并触发该用户的未读消息回调
+            if (messageCallbacks.containsKey(sender)) {
+                messageCallbacks.get(sender).run();
+            }
+        });
+        
         // 创建场景
-        Scene scene = new Scene(root, 800, 600);
-
+        Scene scene = new Scene(root, 1200, 800);
+        
         // 加载CSS样式
         scene.getStylesheets().add(getClass().getResource("/com/example/message/static/app.css").toExternalForm());
-
-        // 设置标题并显示窗口
-        primaryStage.setTitle("棉花糖和猫猫的小屋 - " + username);
+        
         primaryStage.setScene(scene);
         primaryStage.show();
         
@@ -92,16 +191,26 @@ public class Main extends Application {
     
     // 处理接收到的消息
     private void handleReceivedMessage(ChatMessage message) {
-        // 在JavaFX应用程序线程中更新UI
-        Platform.runLater(() -> {
-            // 添加消息到聊天界面
-            addMessageToChat(message);
-            
-            // 滚动到底部
-            chatScrollPane.setVvalue(1.0);
-            
-            // 如果需要，可以播放提示音或显示通知
-        });
+        System.out.println("接收到消息回调: ID=" + message.getId() + 
+                          ", 发送者=" + message.getSender() + 
+                          ", 接收者=" + message.getReceiver() + 
+                          ", 时间=" + message.getTimestamp());
+        
+        // 先判断消息ID是否处理过，避免重复显示
+        if (message.getId() > 0 && displayedMessageIds.contains(message.getId())) {
+            System.out.println("消息已显示过，跳过处理: ID=" + message.getId());
+            return;
+        }
+        
+        // 如果消息ID大于0，记录为已处理
+        if (message.getId() > 0) {
+            displayedMessageIds.add(message.getId());
+            System.out.println("记录消息ID为已处理: " + message.getId());
+        }
+        
+        // 直接将消息转发到addMessageToChat处理
+        // addMessageToChat中会进行详细的过滤和处理逻辑
+        Platform.runLater(() -> addMessageToChat(message));
     }
     
     // 请求用户输入用户名
@@ -170,6 +279,9 @@ public class Main extends Application {
                         successAlert.setHeaderText("已成功连接到聊天服务器");
                         successAlert.setContentText("您现在可以与其他在线用户聊天了。");
                         successAlert.showAndWait();
+                        
+                        // 刷新用户列表
+                        refreshOnlineUsers();
                     } else {
                         // 连接失败
                         Alert failureAlert = new Alert(Alert.AlertType.ERROR);
@@ -208,480 +320,873 @@ public class Main extends Application {
     }
 
     private VBox createSidebar() {
-        // 创建主侧边栏容器
-        VBox sidebarContainer = new VBox();
+        VBox sidebar = new VBox();
+        sidebar.getStyleClass().add("sidebar");
+        sidebar.setPrefWidth(180);
+        sidebar.setMinWidth(80);
+        sidebar.setSpacing(20);
+        sidebar.setPadding(new Insets(30, 15, 15, 15));
         
-        // 创建侧边栏内容
-        VBox sidebar = new VBox(20);  // 设置按钮之间的间距
-        sidebar.setStyle("-fx-background-color: #2C3E50; -fx-padding: 10;"); // 设置背景色和内边距
-        sidebar.setPrefWidth(200);
-        sidebar.setMinWidth(200);
-
-        // 创建按钮
+        // 添加应用标题
+        Label appTitle = new Label("心情通信");
+        appTitle.getStyleClass().add("title-label");
+        appTitle.setAlignment(Pos.CENTER);
+        appTitle.setMaxWidth(Double.MAX_VALUE);
+        
+        // 创建侧边栏按钮
         Button diaryButton = new Button("心情日记");
-        Button chatButton = new Button("聊天");
-
-        // 样式应用到按钮
         diaryButton.getStyleClass().add("sidebar-button");
-        diaryButton.setPrefWidth(180);
+        diaryButton.setMaxWidth(Double.MAX_VALUE);
+        diaryButton.setOnAction(e -> openDiary());
         
+        Button chatButton = new Button("消息聊天");
         chatButton.getStyleClass().add("sidebar-button");
-        chatButton.setPrefWidth(180);
-
-        // 设置按钮点击事件
-        diaryButton.setOnAction(e -> {
-            StackPane content = (StackPane) ((HBox) diaryButton.getScene().getRoot()).getChildren().get(1);
-            openDiary(content);
-        });
+        chatButton.setMaxWidth(Double.MAX_VALUE);
+        chatButton.setOnAction(e -> openChat());
         
-        chatButton.setOnAction(e -> {
-            StackPane content = (StackPane) ((HBox) chatButton.getScene().getRoot()).getChildren().get(1);
-            openChat(content);
-        });
-
-        // 将按钮添加到侧边栏
-        sidebar.getChildren().addAll(diaryButton, chatButton);
+        Button logsButton = new Button("聊天记录");
+        logsButton.getStyleClass().add("sidebar-button");
+        logsButton.setMaxWidth(Double.MAX_VALUE);
+        logsButton.setOnAction(e -> openLogs());
         
-        // 创建一个始终可见的小按钮用于展开/收缩
-        StackPane toggleButtonContainer = new StackPane();
-        toggleButtonContainer.setMinWidth(30);
-        toggleButtonContainer.setPrefWidth(30);
-        toggleButtonContainer.setStyle("-fx-background-color: #1ABC9C;");
+        // 创建收缩/展开按钮
+        ToggleButton toggleSidebar = new ToggleButton("收起");
+        toggleSidebar.getStyleClass().add("sidebar-button");
+        toggleSidebar.setMaxWidth(Double.MAX_VALUE);
         
-        Button toggleButton = new Button("≡");
-        toggleButton.setStyle("-fx-background-color: transparent; -fx-text-fill: white; -fx-font-size: 16px; -fx-padding: 5 0 5 0;");
-        toggleButton.setOnAction(e -> toggleSidebar(sidebar));
-        
-        toggleButtonContainer.getChildren().add(toggleButton);
-        
-        // 创建水平布局，包含侧边栏和切换按钮
-        HBox sidebarLayout = new HBox();
-        sidebarLayout.getChildren().addAll(sidebar, toggleButtonContainer);
-        
-        sidebarContainer.getChildren().add(sidebarLayout);
-        
-        return sidebarContainer;
-    }
-
-    private void openDiary(StackPane content) {
-        // 创建主布局
-        VBox mainLayout = new VBox(15);
-        mainLayout.setPadding(new Insets(15));
-        mainLayout.setFillWidth(true);
-        mainLayout.setAlignment(Pos.TOP_CENTER);
-        
-        // 创建标题
-        Label titleLabel = new Label("心情日记");
-        titleLabel.setFont(Font.font("System", FontWeight.BOLD, 20));
-        titleLabel.setTextFill(Color.WHITE);
-        
-        // 创建搜索区域
-        VBox searchBox = new VBox(10);
-        searchBox.setStyle("-fx-background-color: #34495E; -fx-padding: 15; -fx-background-radius: 5;");
-        searchBox.setMaxWidth(Double.MAX_VALUE);
-        
-        // 创建搜索框
-        TextField searchTextField = new TextField();
-        searchTextField.setPromptText("输入关键字搜索");
-        searchTextField.setMaxWidth(Double.MAX_VALUE);
-        
-        // 创建日期选择器区域
-        HBox datePickerBox = new HBox(10);
-        datePickerBox.setAlignment(Pos.CENTER);
-        
-        // 创建日期选择器
-        DatePicker startDatePicker = new DatePicker();
-        startDatePicker.setPromptText("开始日期");
-        startDatePicker.setPrefWidth(150);
-        
-        Label toLabel = new Label("至");
-        toLabel.setTextFill(Color.WHITE);
-        
-        DatePicker endDatePicker = new DatePicker();
-        endDatePicker.setPromptText("结束日期");
-        endDatePicker.setPrefWidth(150);
-        
-        datePickerBox.getChildren().addAll(startDatePicker, toLabel, endDatePicker);
-        
-        // 创建操作按钮区域
-        HBox actionButtons = new HBox(10);
-        actionButtons.setAlignment(Pos.CENTER);
-        
-        // 创建搜索按钮
-        Button searchButton = new Button("搜索");
-        searchButton.setPrefWidth(100);
-        
-        // 创建批量删除按钮
-        Button batchDeleteButton = new Button("批量删除");
-        batchDeleteButton.getStyleClass().add("delete-button");
-        batchDeleteButton.setPrefWidth(100);
-        
-        actionButtons.getChildren().addAll(searchButton, batchDeleteButton);
-        
-        // 添加到搜索区域
-        searchBox.getChildren().addAll(searchTextField, datePickerBox, actionButtons);
-        
-        // 创建日记显示区域
-        ListView<HBox> diaryListView = new ListView<>();
-        diaryListView.setStyle("-fx-background-color: transparent;");
-        diaryListView.setFixedCellSize(-1); // 允许单元格自动调整高度
-        
-        // 创建日记列表滚动面板
-        ScrollPane diaryScrollPane = new ScrollPane(diaryListView);
-        diaryScrollPane.setFitToWidth(true);
-        diaryScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        diaryScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        diaryScrollPane.setPrefHeight(300);
-        diaryScrollPane.setMaxHeight(Double.MAX_VALUE);
-        diaryScrollPane.setStyle("-fx-background-color: transparent;");
-        VBox.setVgrow(diaryScrollPane, Priority.ALWAYS);
-        
-        // 加载所有日记
-        loadDiaries(diaryListView, null, null, null);
-        
-        // 创建新日记区域
-        VBox newDiaryBox = new VBox(10);
-        newDiaryBox.setStyle("-fx-background-color: #34495E; -fx-padding: 15; -fx-background-radius: 5;");
-        newDiaryBox.setMaxWidth(Double.MAX_VALUE);
-        
-        Label newDiaryLabel = new Label("写新日记");
-        newDiaryLabel.setFont(Font.font("System", FontWeight.BOLD, 16));
-        newDiaryLabel.setTextFill(Color.WHITE);
-        
-        // 创建心情日记文本框
-        TextArea diaryTextArea = new TextArea();
-        diaryTextArea.setPromptText("写下今天的心情...");
-        diaryTextArea.setWrapText(true);  // 自动换行，方便输入较长的文本
-        diaryTextArea.setPrefHeight(100);
-        
-        // 创建标签输入框
-        TextField tagsTextField = new TextField();
-        tagsTextField.setPromptText("输入标签（例如：#开心, #总结）");
-        
-        // 创建保存按钮
-        Button saveButton = new Button("保存");
-        saveButton.setPrefWidth(100);
-        saveButton.setAlignment(Pos.CENTER);
-        
-        // 添加到新日记区域
-        newDiaryBox.getChildren().addAll(newDiaryLabel, diaryTextArea, tagsTextField, saveButton);
-        
-        // 设置按钮点击事件
-        searchButton.setOnAction(e -> {
-            String keyword = searchTextField.getText();
-            String startDate = startDatePicker.getValue() != null ? startDatePicker.getValue().toString() : "";
-            String endDate = endDatePicker.getValue() != null ? endDatePicker.getValue().toString() : "";
-            loadDiaries(diaryListView, keyword, startDate, endDate);
-        });
-        
-        batchDeleteButton.setOnAction(e -> {
-            openBatchDeleteDialog(diaryListView, searchTextField.getText(), 
-                    startDatePicker.getValue() != null ? startDatePicker.getValue().toString() : null,
-                    endDatePicker.getValue() != null ? endDatePicker.getValue().toString() : null);
-        });
-        
-        saveButton.setOnAction(e -> {
-            String contentText = diaryTextArea.getText();
-            String tagsText = tagsTextField.getText();  // 获取用户输入的标签
-            if (!contentText.isEmpty()) {
-                DiaryService.saveDiary(contentText, tagsText);  // 保存日记及标签
-                diaryTextArea.clear();  // 清空文本框
-                tagsTextField.clear();  // 清空标签框
-                loadDiaries(diaryListView, null, null, null); // 更新日记列表
+        toggleSidebar.setOnAction(e -> {
+            if (toggleSidebar.isSelected()) {
+                toggleSidebar.setText("展开");
+                sidebar.setPrefWidth(80);
+                diaryButton.setText("");
+                chatButton.setText("");
+                logsButton.setText("");
+                // 添加图标样式
+                diaryButton.getStyleClass().add("icon-only");
+                chatButton.getStyleClass().add("icon-only");
+                logsButton.getStyleClass().add("icon-only");
+                appTitle.setVisible(false);
+            } else {
+                toggleSidebar.setText("收起");
+                sidebar.setPrefWidth(180);
+                diaryButton.setText("心情日记");
+                chatButton.setText("消息聊天");
+                logsButton.setText("聊天记录");
+                // 移除图标样式
+                diaryButton.getStyleClass().remove("icon-only");
+                chatButton.getStyleClass().remove("icon-only");
+                logsButton.getStyleClass().remove("icon-only");
+                appTitle.setVisible(true);
             }
         });
         
-        // 添加所有组件到主布局
-        mainLayout.getChildren().addAll(titleLabel, searchBox, diaryScrollPane, newDiaryBox);
+        Region spacer = new Region();
+        spacer.getStyleClass().add("grow-y");
+        VBox.setVgrow(spacer, Priority.ALWAYS);
         
-        // 更新内容区域
-        content.getChildren().clear();
-        content.getChildren().add(mainLayout);
+        sidebar.getChildren().addAll(appTitle, diaryButton, chatButton, logsButton, spacer, toggleSidebar);
+        return sidebar;
     }
 
-    // 加载日记列表
-    private void loadDiaries(ListView<HBox> diaryListView, String keyword, String startDate, String endDate) {
-        diaryListView.getItems().clear();
+    private void openDiary() {
+        mainContent.getChildren().clear();
         
-        // 设置列表视图自动调整宽度
-        diaryListView.setPrefWidth(Region.USE_COMPUTED_SIZE);
-        diaryListView.setMinWidth(Region.USE_COMPUTED_SIZE);
-        diaryListView.setMaxWidth(Double.MAX_VALUE);
+        VBox diaryPanel = new VBox();
+        diaryPanel.getStyleClass().addAll("content-box", "responsive-container");
+        diaryPanel.setSpacing(15);
+        diaryPanel.setPadding(new Insets(15));
+        VBox.setVgrow(diaryPanel, Priority.ALWAYS);
+        HBox.setHgrow(diaryPanel, Priority.ALWAYS);
         
-        // 设置列表视图自动调整高度
-        diaryListView.setPrefHeight(300);
-        diaryListView.setMinHeight(200);
-        diaryListView.setMaxHeight(Double.MAX_VALUE);
+        Label titleLabel = new Label("心情日记");
+        titleLabel.getStyleClass().add("title-label");
         
-        List<Diary> diaries;
-        if (keyword != null || startDate != null || endDate != null) {
-            diaries = DiaryService.searchDiaries(keyword, startDate, endDate);
-        } else {
-            diaries = DiaryService.getAllDiaries();
-        }
+        HBox infoBox = new HBox();
+        infoBox.getStyleClass().add("info-box");
+        infoBox.setAlignment(Pos.CENTER_LEFT);
+        infoBox.setPadding(new Insets(5, 10, 5, 10));
         
-        for (Diary diary : diaries) {
-            // 创建日记项布局
-            HBox diaryItem = new HBox(10);
-            diaryItem.setPadding(new Insets(10));
-            diaryItem.setAlignment(Pos.CENTER_LEFT);
-            diaryItem.getStyleClass().add("diary-item");
-            diaryItem.setMaxWidth(Double.MAX_VALUE);
+        HBox cloudButtons = new HBox();
+        cloudButtons.setSpacing(10);
+        cloudButtons.setAlignment(Pos.CENTER_RIGHT);
+        
+        // 创建一个分割面板，左侧是日记列表，右侧是日记编辑区
+        SplitPane splitPane = new SplitPane();
+        splitPane.getStyleClass().add("responsive-container");
+        VBox.setVgrow(splitPane, Priority.ALWAYS);
+        
+        // 创建左侧的日记列表
+        VBox listSection = new VBox();
+        listSection.setSpacing(10);
+        listSection.getStyleClass().add("content-box");
+        listSection.setPadding(new Insets(10));
+        
+        // 搜索区域
+        HBox searchBox = new HBox();
+        searchBox.setSpacing(10);
+        searchBox.setAlignment(Pos.CENTER_LEFT);
+        
+        TextField searchField = new TextField();
+        searchField.setPromptText("搜索关键词");
+        searchField.setPrefWidth(150);
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+        
+        DatePicker startDate = new DatePicker();
+        startDate.setPromptText("开始日期");
+        startDate.setPrefWidth(130);
+        
+        DatePicker endDate = new DatePicker();
+        endDate.setPromptText("结束日期");
+        endDate.setPrefWidth(130);
+        
+        // 日记列表
+        ListView<Diary> diaryListView = new ListView<>();
+        VBox.setVgrow(diaryListView, Priority.ALWAYS);
+        
+        Button searchButton = new Button("搜索");
+        searchButton.setOnAction(e -> {
+            String keyword = searchField.getText();
+            LocalDate start = startDate.getValue();
+            LocalDate end = endDate.getValue();
+            loadFilteredDiaries(diaryListView, keyword, start, end);
+        });
+        
+        searchBox.getChildren().addAll(searchField, startDate, endDate, searchButton);
+        
+        if (DiaryService.isCloudStorageEnabled()) {
+            Label infoLabel = new Label("日记已启用云同步，所有人都能看到你的心情");
+            infoBox.getChildren().add(infoLabel);
             
-            // 创建日记内容显示区域
-            VBox diaryContent = new VBox(5);
-            diaryContent.setPrefWidth(Region.USE_COMPUTED_SIZE);
-            diaryContent.setMaxWidth(Double.MAX_VALUE);
-            diaryContent.setMinWidth(100);
-            
-            // 日期和标签
-            HBox metaInfo = new HBox(10);
-            Label dateLabel = new Label("日期: " + diary.getDate());
-            dateLabel.getStyleClass().add("diary-date");
-            
-            Label tagsLabel = new Label("标签: " + diary.getTags());
-            tagsLabel.getStyleClass().add("diary-tags");
-            
-            metaInfo.getChildren().addAll(dateLabel, tagsLabel);
-            
-            // 内容
-            Label contentLabel = new Label(diary.getContent());
-            contentLabel.setWrapText(true);
-            contentLabel.setMaxWidth(Double.MAX_VALUE);
-            contentLabel.getStyleClass().add("diary-content");
-            
-            diaryContent.getChildren().addAll(metaInfo, contentLabel);
-            HBox.setHgrow(diaryContent, Priority.ALWAYS);
-            
-            // 创建操作按钮区域
-            VBox buttonBox = new VBox(5);
-            buttonBox.setAlignment(Pos.CENTER);
-            buttonBox.setMinWidth(80);
-            
-            // 创建编辑按钮
-            Button editButton = new Button("编辑");
-            editButton.getStyleClass().add("edit-button");
-            editButton.setMaxWidth(Double.MAX_VALUE);
-            editButton.setOnAction(e -> {
-                openEditDiaryDialog(diary, diaryListView, keyword, startDate, endDate);
+            Button refreshButton = new Button("从云端刷新");
+            refreshButton.getStyleClass().add("sync-button");
+            refreshButton.setOnAction(e -> {
+                DiaryService.refreshFromCloud();
+                loadDiaries(diaryListView);
+                showAlert("刷新成功", "已从云端获取最新日记");
             });
             
-            // 创建删除按钮
-            Button deleteButton = new Button("删除");
-            deleteButton.getStyleClass().add("delete-button");
-            deleteButton.setMaxWidth(Double.MAX_VALUE);
-            deleteButton.setOnAction(e -> {
-                // 确认删除
-                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                alert.setTitle("确认删除");
-                alert.setHeaderText("您确定要删除这条日记吗？");
-                alert.setContentText("此操作不可撤销。");
+            cloudButtons.getChildren().add(refreshButton);
+        }
+        
+        HBox headerBox = new HBox();
+        headerBox.setSpacing(15);
+        headerBox.setAlignment(Pos.CENTER);
+        headerBox.getChildren().addAll(titleLabel, infoBox);
+        HBox.setHgrow(infoBox, Priority.ALWAYS);
+        headerBox.getChildren().add(cloudButtons);
+        
+        diaryListView.setCellFactory(param -> new ListCell<Diary>() {
+            @Override
+            protected void updateItem(Diary diary, boolean empty) {
+                super.updateItem(diary, empty);
+                if (empty || diary == null) {
+                    setText(null);
+                    setGraphic(null);
+                    return;
+                }
                 
-                Optional<ButtonType> result = alert.showAndWait();
-                if (result.isPresent() && result.get() == ButtonType.OK) {
-                    // 执行删除
-                    DiaryService.deleteDiary(diary.getId());
-                    // 刷新列表
-                    loadDiaries(diaryListView, keyword, startDate, endDate);
+                VBox diaryItem = new VBox();
+                diaryItem.getStyleClass().add("diary-item");
+                diaryItem.setSpacing(5);
+                
+                // 确保使用日记的原始时间，而不是当前时间
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy年MM月dd日 HH:mm:ss");
+                String formattedDate = diary.getDate().format(formatter);
+                Label dateLabel = new Label(formattedDate);
+                dateLabel.getStyleClass().add("diary-date");
+                
+                Label moodLabel = new Label("#" + diary.getMood());
+                moodLabel.getStyleClass().add("diary-tags");
+                
+                HBox metaInfo = new HBox(10);
+                metaInfo.getChildren().addAll(dateLabel, moodLabel);
+                
+                Label contentLabel = new Label(diary.getContent());
+                contentLabel.setWrapText(true);
+                contentLabel.setMaxWidth(Double.MAX_VALUE);
+                contentLabel.getStyleClass().add("diary-content");
+                
+                HBox buttonsBox = new HBox();
+                buttonsBox.setSpacing(10);
+                buttonsBox.setAlignment(Pos.CENTER_RIGHT);
+                
+                Button deleteButton = new Button("删除");
+                deleteButton.getStyleClass().add("delete-button");
+                deleteButton.setOnAction(event -> {
+                    try {
+                        DiaryService.deleteDiary(diary.getId());
+                        loadDiaries(diaryListView);
+                        showAlert("删除成功", "日记已删除");
+                    } catch (Exception ex) {
+                        showError("删除失败", ex.getMessage());
+                    }
+                });
+                
+                Button editButton = new Button("编辑");
+                editButton.getStyleClass().add("edit-button");
+                editButton.setOnAction(event -> {
+                    diaryContentArea.setText(diary.getContent());
+                    moodSelector.setValue(diary.getMood());
+                    currentDiaryId = diary.getId();
+                });
+                
+                buttonsBox.getChildren().addAll(editButton, deleteButton);
+                
+                diaryItem.getChildren().addAll(metaInfo, contentLabel, buttonsBox);
+                setGraphic(diaryItem);
+                setText(null);
+            }
+        });
+        
+        listSection.getChildren().addAll(searchBox, diaryListView);
+        
+        // 创建右侧的日记编辑区
+        VBox editSection = new VBox();
+        editSection.setSpacing(15);
+        editSection.getStyleClass().add("content-box");
+        editSection.setPadding(new Insets(15));
+        
+        Label contentLabel = new Label("今天的心情：");
+        
+        diaryContentArea = new TextArea();
+        diaryContentArea.setPromptText("写下你今天的心情...");
+        diaryContentArea.setPrefRowCount(10);
+        VBox.setVgrow(diaryContentArea, Priority.ALWAYS);
+        
+        HBox moodBox = new HBox();
+        moodBox.setAlignment(Pos.CENTER_LEFT);
+        moodBox.setSpacing(10);
+        
+        Label moodLabel = new Label("选择心情：");
+        moodSelector = new ComboBox<>();
+        moodSelector.getItems().addAll("开心", "悲伤", "愤怒", "平静", "焦虑", "兴奋", "困倦");
+        moodSelector.setValue("开心");
+        
+        moodBox.getChildren().addAll(moodLabel, moodSelector);
+        
+        Button saveButton = new Button("保存日记");
+        saveButton.setMaxWidth(Double.MAX_VALUE);
+        saveButton.setOnAction(e -> {
+            try {
+                String content = diaryContentArea.getText();
+                String mood = moodSelector.getValue();
+                
+                if (content.isEmpty()) {
+                    showError("内容为空", "请输入日记内容");
+                    return;
+                }
+                
+                saveButton.setDisable(true); // 禁用按钮防止重复提交
+                
+                int result;
+                if (currentDiaryId != -1) {
+                    // 更新现有日记
+                    boolean success = DiaryService.updateDiary(currentDiaryId, content, mood);
+                    if (success) {
+                        showAlert("更新成功", "日记已更新到本地数据库，并尝试同步到云端");
+                        result = currentDiaryId;
+                    } else {
+                        showError("更新失败", "无法更新日记，请检查日志了解详情");
+                        saveButton.setDisable(false);
+                        return;
+                    }
+                } else {
+                    // 添加新日记
+                    result = DiaryService.addDiary(content, mood);
+                    if (result > 0) {
+                        showAlert("保存成功", "日记已保存到本地数据库，并尝试同步到云端");
+                    } else {
+                        showError("保存失败", "无法保存日记，请检查日志了解详情");
+                        saveButton.setDisable(false);
+                        return;
+                    }
+                }
+                
+                // 重置表单
+                diaryContentArea.clear();
+                moodSelector.setValue("开心");
+                currentDiaryId = -1;
+                
+                // 刷新日记列表
+                loadDiaries(diaryListView);
+                
+                // 重新启用保存按钮
+                saveButton.setDisable(false);
+            } catch (Exception ex) {
+                showError("操作失败", "发生错误: " + ex.getMessage());
+                ex.printStackTrace();
+                saveButton.setDisable(false);
+            }
+        });
+        
+        editSection.getChildren().addAll(contentLabel, diaryContentArea, moodBox, saveButton);
+        
+        // 将左右两部分添加到分割面板
+        splitPane.getItems().addAll(listSection, editSection);
+        splitPane.setDividerPositions(0.4);
+        
+        // 添加所有元素到日记面板
+        diaryPanel.getChildren().addAll(headerBox, splitPane);
+        
+        // 将日记面板添加到主内容区
+        mainContent.getChildren().add(diaryPanel);
+        
+        // 加载日记
+        loadDiaries(diaryListView);
+    }
+
+    private void openChat() {
+        mainContent.getChildren().clear();
+        
+        // 创建并启动聊天刷新定时器
+        if (chatRefreshTimer != null) {
+            chatRefreshTimer.stop();
+        }
+        
+        chatRefreshTimer = new Timeline(
+            new KeyFrame(Duration.seconds(1), event -> {  // 1秒刷新一次
+                String currentPeer = ChatService.getCurrentChatPeer();
+                if (currentPeer != null && !currentPeer.isEmpty()) {
+                    // 静默刷新与当前用户的聊天历史
+                    refreshChatWithUser(currentPeer, false);
+                }
+            })
+        );
+        chatRefreshTimer.setCycleCount(Timeline.INDEFINITE);
+        chatRefreshTimer.play();
+        
+        VBox chatPanel = new VBox();
+        chatPanel.getStyleClass().addAll("content-box", "responsive-container");
+        chatPanel.setSpacing(15);
+        chatPanel.setPadding(new Insets(15));
+        VBox.setVgrow(chatPanel, Priority.ALWAYS);
+        HBox.setHgrow(chatPanel, Priority.ALWAYS);
+        
+        // 当聊天窗口关闭时停止刷新定时器
+        chatPanel.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (oldScene != null && newScene == null) {
+                if (chatRefreshTimer != null) {
+                    chatRefreshTimer.stop();
+                }
+            }
+        });
+        
+        Label titleLabel = new Label("消息聊天");
+        titleLabel.getStyleClass().add("title-label");
+        
+        HBox topBox = new HBox();
+        topBox.setAlignment(Pos.CENTER_LEFT);
+        topBox.setSpacing(15);
+        
+        HBox connectionBox = new HBox();
+        connectionBox.setAlignment(Pos.CENTER_RIGHT);
+        connectionBox.setSpacing(10);
+        HBox.setHgrow(connectionBox, Priority.ALWAYS);
+        
+        // 当前聊天对象显示
+        Label currentChatPeerLabel = new Label("当前未选择聊天对象");
+        currentChatPeerLabel.getStyleClass().add("info-box");
+        currentChatPeerLabel.setPadding(new Insets(5, 10, 5, 10));
+        topBox.getChildren().addAll(titleLabel, currentChatPeerLabel);
+        
+        if (isServerMode) {
+            Label serverStatusLabel = new Label("服务器模式");
+            serverStatusLabel.getStyleClass().add("server-status");
+            serverStatusLabel.setPadding(new Insets(5, 10, 5, 10));
+            topBox.getChildren().add(serverStatusLabel);
+            
+            // 创建左右分割的布局
+            SplitPane chatSplitPane = new SplitPane();
+            VBox.setVgrow(chatSplitPane, Priority.ALWAYS);
+            
+            // 在线用户显示区域（左侧）
+            VBox usersBox = new VBox();
+            usersBox.getStyleClass().add("content-box");
+            usersBox.setSpacing(10);
+            usersBox.setPadding(new Insets(10));
+            usersBox.setMinWidth(200);
+            usersBox.setMaxWidth(250);
+            
+            Label usersLabel = new Label("在线用户");
+            usersLabel.getStyleClass().add("section-label");
+            
+            onlineUsersListView = new ListView<>();
+            VBox.setVgrow(onlineUsersListView, Priority.ALWAYS);
+            
+            // 设置在线用户列表单元格工厂，支持消息提醒和状态显示
+            onlineUsersListView.setCellFactory(param -> new ListCell<String>() {
+                @Override
+                protected void updateItem(String user, boolean empty) {
+                    super.updateItem(user, empty);
+                    if (empty || user == null) {
+                        setText(null);
+                        setGraphic(null);
+                        return;
+                    }
+                    
+                    HBox userItem = new HBox();
+                    userItem.setSpacing(10);
+                    userItem.setAlignment(Pos.CENTER_LEFT);
+                    
+                    // 用户头像（简单圆形）
+                    Circle userAvatar = new Circle(15);
+                    userAvatar.setFill(Color.LIGHTBLUE);
+                    Text userInitial = new Text(user.substring(0, 1).toUpperCase());
+                    StackPane avatarPane = new StackPane(userAvatar, userInitial);
+                    
+                    // 用户名称和状态区域
+                    VBox userInfo = new VBox();
+                    userInfo.setSpacing(3);
+                    Label userName = new Label(user);
+                    userName.getStyleClass().add("user-name");
+                    
+                    userInfo.getChildren().add(userName);
+                    
+                    // 未读消息标记
+                    Circle unreadBadge = new Circle(8, Color.RED);
+                    unreadBadge.setVisible(false); // 默认不可见
+                    
+                    userItem.getChildren().addAll(avatarPane, userInfo);
+                    HBox.setHgrow(userInfo, Priority.ALWAYS);
+                    userItem.getChildren().add(unreadBadge);
+                    
+                    // 如果是当前选中用户，设置样式
+                    if (user.equals(ChatService.getCurrentChatPeer())) {
+                        getStyleClass().add("selected-user");
+                        unreadBadge.setVisible(false);
+                    }
+                    
+                    // 设置处理新消息的样式
+                    setOnNewMessage(user, () -> {
+                        // 如果不是当前选中的用户，显示未读标记
+                        if (!user.equals(ChatService.getCurrentChatPeer())) {
+                            Platform.runLater(() -> {
+                                unreadBadge.setVisible(true);
+                            });
+                        }
+                    });
+                    
+                    setGraphic(userItem);
+                    setText(null);
                 }
             });
             
-            buttonBox.getChildren().addAll(editButton, deleteButton);
-            
-            diaryItem.getChildren().addAll(diaryContent, buttonBox);
-            
-            // 添加到列表
-            diaryListView.getItems().add(diaryItem);
-        }
-    }
-
-    // 打开编辑日记对话框
-    private void openEditDiaryDialog(Diary diary, ListView<HBox> diaryListView, String keyword, String startDate, String endDate) {
-        // 创建对话框
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("编辑日记");
-        dialog.setHeaderText("编辑您的日记内容和标签");
-        
-        // 设置按钮
-        ButtonType saveButtonType = new ButtonType("保存", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
-        
-        // 创建内容区域
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20, 150, 10, 10));
-        
-        // 创建文本区域和标签输入框
-        TextArea contentTextArea = new TextArea(diary.getContent());
-        contentTextArea.setWrapText(true);
-        contentTextArea.setPrefHeight(200);
-        contentTextArea.getStyleClass().add("diary-content");
-        
-        TextField tagsTextField = new TextField(diary.getTags());
-        tagsTextField.getStyleClass().add("diary-tags");
-        
-        // 添加标签
-        Label contentLabel = new Label("内容:");
-        contentLabel.getStyleClass().add("dialog-label");
-        
-        Label tagsLabel = new Label("标签:");
-        tagsLabel.getStyleClass().add("dialog-label");
-        
-        // 添加到网格
-        grid.add(contentLabel, 0, 0);
-        grid.add(contentTextArea, 1, 0);
-        grid.add(tagsLabel, 0, 1);
-        grid.add(tagsTextField, 1, 1);
-        
-        dialog.getDialogPane().setContent(grid);
-        
-        // 请求焦点
-        Platform.runLater(() -> contentTextArea.requestFocus());
-        
-        // 处理结果
-        Optional<ButtonType> result = dialog.showAndWait();
-        if (result.isPresent() && result.get() == saveButtonType) {
-            String newContent = contentTextArea.getText();
-            String newTags = tagsTextField.getText();
-            
-            // 更新日记
-            DiaryService.updateDiary(diary.getId(), newContent, newTags);
-            
-            // 刷新列表
-            loadDiaries(diaryListView, keyword, startDate, endDate);
-        }
-    }
-
-    private void openChat(StackPane content) {
-        if (isServerMode) {
-            openServerModeChat(content);
-        } else {
-            openDirectModeChat(content);
-        }
-    }
-    
-    // 服务器模式的聊天界面
-    private void openServerModeChat(StackPane content) {
-        // 创建主布局
-        VBox chatLayout = new VBox(15);
-        chatLayout.setPadding(new Insets(15));
-        chatLayout.setFillWidth(true);
-        chatLayout.setAlignment(Pos.TOP_CENTER);
-        
-        // 创建标题
-        Label titleLabel = new Label("服务器聊天模式");
-        titleLabel.setFont(Font.font("System", FontWeight.BOLD, 20));
-        titleLabel.setTextFill(Color.WHITE);
-        
-        // 创建连接状态显示
-        HBox statusBox = new HBox(10);
-        statusBox.setAlignment(Pos.CENTER_LEFT);
-        statusBox.setStyle("-fx-background-color: #34495E; -fx-padding: 15; -fx-background-radius: 5;");
-        statusBox.setMaxWidth(Double.MAX_VALUE);
-        
-        Label statusLabel = new Label("服务器模式: ");
-        statusLabel.setTextFill(Color.WHITE);
-        
-        connectionStatusLabel = new Label(ChatService.isConnectedToServer() ? "已连接" : "未连接");
-        connectionStatusLabel.setTextFill(ChatService.isConnectedToServer() ? Color.GREEN : Color.RED);
-        
-        Button refreshButton = new Button("刷新用户列表");
-        refreshButton.setOnAction(e -> refreshOnlineUsers());
-        
-        statusBox.getChildren().addAll(statusLabel, connectionStatusLabel, refreshButton);
-        
-        // 创建聊天内容区域
-        HBox contentSplit = new HBox(15);
-        contentSplit.setMaxWidth(Double.MAX_VALUE);
-        contentSplit.setMaxHeight(Double.MAX_VALUE);
-        VBox.setVgrow(contentSplit, Priority.ALWAYS);
-        
-        // 创建在线用户列表
-        VBox userListBox = new VBox(10);
-        userListBox.setStyle("-fx-background-color: #34495E; -fx-padding: 15; -fx-background-radius: 5;");
-        userListBox.setPrefWidth(200);
-        userListBox.setMaxHeight(Double.MAX_VALUE);
-        
-        Label usersLabel = new Label("在线用户");
-        usersLabel.setFont(Font.font("System", FontWeight.BOLD, 16));
-        usersLabel.setTextFill(Color.WHITE);
-        
-        onlineUsersListView = new ListView<>(onlineUsers);
-        onlineUsersListView.setPrefHeight(350);
-        onlineUsersListView.setMaxHeight(Double.MAX_VALUE);
-        VBox.setVgrow(onlineUsersListView, Priority.ALWAYS);
-        
-        onlineUsersListView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null) {
-                currentPeer = newVal;
-                ChatService.setCurrentChatPeer(newVal);
-                loadChatHistory(newVal);
+            // 先更新现有的用户列表
+            List<String> currentUsers = ChatService.getOnlineUsers();
+            if (currentUsers != null && !currentUsers.isEmpty()) {
+                Platform.runLater(() -> {
+                    onlineUsersListView.getItems().clear();
+                    onlineUsersListView.getItems().addAll(currentUsers);
+                });
             }
-        });
+            
+            // 设置用户列表更新回调
+            ChatService.setOnUserListUpdate(users -> {
+                if (users == null || users.isEmpty()) {
+                    return;
+                }
+                
+                Platform.runLater(() -> {
+                    try {
+                        // 保存当前选中项
+                        String currentSelectedUser = onlineUsersListView.getSelectionModel().getSelectedItem();
+                        
+                        onlineUsersListView.getItems().clear();
+                        onlineUsersListView.getItems().addAll(users);
+                        
+                        // 恢复选中项
+                        if (currentSelectedUser != null) {
+                            for (int i = 0; i < onlineUsersListView.getItems().size(); i++) {
+                                if (onlineUsersListView.getItems().get(i).equals(currentSelectedUser)) {
+                                    onlineUsersListView.getSelectionModel().select(i);
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        System.out.println("已更新UI中的用户列表，用户数: " + users.size());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            });
+            
+            // 设置用户列表点击事件
+            onlineUsersListView.getSelectionModel().selectedItemProperty().addListener(
+                (observable, oldValue, newValue) -> {
+                    if (newValue != null && !newValue.equals(oldValue)) {
+                        System.out.println("已选择聊天用户: " + newValue);
+                        
+                        // 设置当前聊天对象
+                        ChatService.setCurrentChatPeer(newValue);
+                        
+                        // 更新当前聊天对象标签
+                        Platform.runLater(() -> {
+                            currentChatPeerLabel.setText("正在与 " + newValue + " 聊天");
+                        });
+                        
+                        // 清空当前消息显示和已显示消息ID集合
+                        chatMessages.getChildren().clear();
+                        displayedMessageIds.clear();
+                        
+                        // 加载并显示与该用户的历史消息
+                        showChatWithUser(newValue);
+                        
+                        // 清除未读标记
+                        clearUnreadBadge(newValue);
+                        
+                        // 刷新ListView使样式生效
+                        onlineUsersListView.refresh();
+                    }
+                }
+            );
+            
+            usersBox.getChildren().addAll(usersLabel, onlineUsersListView);
+            
+            // 创建消息显示区域（右侧）
+            VBox messagesBox = new VBox();
+            messagesBox.getStyleClass().add("content-box");
+            messagesBox.setSpacing(10);
+            VBox.setVgrow(messagesBox, Priority.ALWAYS);
+            
+            // 消息展示区域
+            chatScrollPane = new ScrollPane();
+            chatScrollPane.setFitToWidth(true);
+            chatScrollPane.setFitToHeight(true);
+            VBox.setVgrow(chatScrollPane, Priority.ALWAYS);
+            
+            VBox messageContainer = new VBox();
+            messageContainer.setSpacing(10);
+            messageContainer.setPadding(new Insets(10));
+            VBox.setVgrow(messageContainer, Priority.ALWAYS);
+            chatMessages = messageContainer;
+            
+            chatScrollPane.setContent(messageContainer);
+            
+            // 创建发送消息区域
+            HBox sendMessageBox = new HBox();
+            sendMessageBox.setSpacing(10);
+            sendMessageBox.setAlignment(Pos.CENTER);
+            
+            TextField messageInput = new TextField();
+            messageInput.setPromptText("输入消息...");
+            HBox.setHgrow(messageInput, Priority.ALWAYS);
+            
+            Button sendButton = new Button("发送");
+            sendButton.getStyleClass().add("send-button");
+            sendButton.setDisable(true); // 初始禁用，直到选择聊天对象
+            
+            sendButton.setOnAction(e -> {
+                String message = messageInput.getText().trim();
+                if (!message.isEmpty()) {
+                    String currentPeer = ChatService.getCurrentChatPeer();
+                    if (currentPeer != null && !currentPeer.isEmpty()) {
+                        // 禁用发送按钮防止重复发送
+                        sendButton.setDisable(true);
+                        
+                        // 发送消息给当前选中的用户
+                        ChatService.sendPrivateMessage(currentPeer, message);
+                        messageInput.clear();
+                        
+                        // 自动滚动到最新消息
+                        Platform.runLater(() -> {
+                            chatScrollPane.setVvalue(1.0);
+                            // 短暂延迟后重新启用发送按钮
+                            new Thread(() -> {
+                                try {
+                                    Thread.sleep(300);
+                                    Platform.runLater(() -> sendButton.setDisable(false));
+                                } catch (InterruptedException ex) {
+                                    Thread.currentThread().interrupt();
+                                    Platform.runLater(() -> sendButton.setDisable(false));
+                                }
+                            }).start();
+                        });
+                    } else {
+                        showError("未选择聊天对象", "请先从在线用户列表中选择一个聊天对象");
+                    }
+                }
+            });
+            
+            // 当选择了聊天对象时启用发送按钮
+            onlineUsersListView.getSelectionModel().selectedItemProperty().addListener(
+                (observable, oldValue, newValue) -> {
+                    sendButton.setDisable(newValue == null);
+                }
+            );
+            
+            messageInput.setOnKeyPressed(e -> {
+                if (e.getCode() == KeyCode.ENTER && !sendButton.isDisable()) {
+                    sendButton.fire();
+                }
+            });
+            
+            sendMessageBox.getChildren().addAll(messageInput, sendButton);
+            
+            messagesBox.getChildren().addAll(chatScrollPane, sendMessageBox);
+            
+            // 添加分割面板
+            chatSplitPane.getItems().addAll(usersBox, messagesBox);
+            chatSplitPane.setDividerPositions(0.25);
+            SplitPane.setResizableWithParent(usersBox, false);
+            
+            chatPanel.getChildren().addAll(topBox, chatSplitPane);
+        } else {
+            // 直连模式布局...保持原有代码
+            Label clientStatusLabel = new Label(connectionStatus);
+            clientStatusLabel.getStyleClass().add("info-box");
+            clientStatusLabel.setPadding(new Insets(5, 10, 5, 10));
+            
+            Button connectButton = new Button("连接服务器");
+            connectButton.setOnAction(e -> requestServerInfo());
+            
+            connectionBox.getChildren().add(connectButton);
+            topBox.getChildren().addAll(titleLabel, clientStatusLabel, connectionBox);
+            
+            // 创建消息区域
+            VBox messagesBox = new VBox();
+            messagesBox.getStyleClass().add("content-box");
+            messagesBox.setSpacing(10);
+            VBox.setVgrow(messagesBox, Priority.ALWAYS);
+            
+            Label messagesLabel = new Label("聊天消息");
+            
+            chatScrollPane = new ScrollPane();
+            chatScrollPane.setFitToWidth(true);
+            chatScrollPane.setFitToHeight(true);
+            VBox.setVgrow(chatScrollPane, Priority.ALWAYS);
+            
+            VBox messageContainer = new VBox();
+            messageContainer.setSpacing(10);
+            messageContainer.setPadding(new Insets(10));
+            VBox.setVgrow(messageContainer, Priority.ALWAYS);
+            chatMessages = messageContainer;
+            
+            chatScrollPane.setContent(messageContainer);
+            messagesBox.getChildren().addAll(messagesLabel, chatScrollPane);
+            
+            // 创建发送消息区域
+            HBox sendMessageBox = new HBox();
+            sendMessageBox.setSpacing(10);
+            sendMessageBox.setPadding(new Insets(10));
+            sendMessageBox.getStyleClass().add("content-box");
+            
+            TextField messageInput = new TextField();
+            messageInput.setPromptText("输入消息...");
+            HBox.setHgrow(messageInput, Priority.ALWAYS);
+            
+            Button sendButton = new Button("发送");
+            sendButton.getStyleClass().add("button");
+            sendButton.setOnAction(e -> {
+                if (chatClient == null || !chatClient.isConnected()) {
+                    showError("未连接", "请先连接到服务器");
+                    return;
+                }
+                
+                String message = messageInput.getText().trim();
+                if (!message.isEmpty()) {
+                    chatClient.sendMessage(message);
+                    messageInput.clear();
+                }
+            });
+            
+            messageInput.setOnKeyPressed(e -> {
+                if (e.getCode() == KeyCode.ENTER) {
+                    sendButton.fire();
+                }
+            });
+            
+            sendMessageBox.getChildren().addAll(messageInput, sendButton);
+            
+            // 添加所有元素到聊天面板
+            chatPanel.getChildren().addAll(topBox, messagesBox, sendMessageBox);
+        }
         
-        userListBox.getChildren().addAll(usersLabel, onlineUsersListView);
-        
-        // 创建聊天区域
-        VBox chatBox = new VBox(10);
-        chatBox.setStyle("-fx-background-color: #34495E; -fx-padding: 15; -fx-background-radius: 5;");
-        chatBox.setPrefWidth(450);
-        chatBox.setMaxWidth(Double.MAX_VALUE);
-        chatBox.setMaxHeight(Double.MAX_VALUE);
-        HBox.setHgrow(chatBox, Priority.ALWAYS);
-        
-        // 创建聊天标题
-        Label chatTitleLabel = new Label("聊天消息");
-        chatTitleLabel.setFont(Font.font("System", FontWeight.BOLD, 16));
-        chatTitleLabel.setTextFill(Color.WHITE);
-        
-        // 创建聊天消息显示区域
-        chatMessagesBox = new VBox(10);
-        chatMessagesBox.setPadding(new Insets(10));
-        chatMessagesBox.setMaxWidth(Double.MAX_VALUE);
-        chatMessagesBox.setMaxHeight(Double.MAX_VALUE);
-        
-        chatScrollPane = new ScrollPane(chatMessagesBox);
-        chatScrollPane.setFitToWidth(true);
-        chatScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        chatScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        chatScrollPane.setPrefHeight(300);
-        chatScrollPane.setMaxHeight(Double.MAX_VALUE);
-        VBox.setVgrow(chatScrollPane, Priority.ALWAYS);
-        
-        // 创建消息输入区域
-        HBox messageInputBox = new HBox(10);
-        messageInputBox.setAlignment(Pos.CENTER);
-        
-        messageField = new TextField();
-        messageField.setPromptText("输入消息...");
-        messageField.setPrefWidth(500);
-        messageField.setOnAction(e -> sendMessage()); // 按Enter发送消息
-        HBox.setHgrow(messageField, Priority.ALWAYS);
-        
-        Button sendButton = new Button("发送");
-        sendButton.setOnAction(e -> sendMessage());
-        
-        messageInputBox.getChildren().addAll(messageField, sendButton);
-        
-        // 将组件添加到聊天区域
-        chatBox.getChildren().addAll(chatTitleLabel, chatScrollPane, messageInputBox);
-        
-        // 将用户列表和聊天区域添加到分割布局
-        contentSplit.getChildren().addAll(userListBox, chatBox);
-        
-        // 将所有组件添加到主布局
-        chatLayout.getChildren().addAll(titleLabel, statusBox, contentSplit);
-        
-        // 更新内容区域
-        content.getChildren().clear();
-        content.getChildren().add(chatLayout);
-        
-        // 刷新在线用户列表
-        refreshOnlineUsers();
+        // 将聊天面板添加到主内容区
+        mainContent.getChildren().add(chatPanel);
     }
-    
-    // 刷新在线用户列表
+
+    private void addMessageToChat(ChatMessage message) {
+        // 确保在JavaFX主线程中执行
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(() -> addMessageToChat(message));
+            return;
+        }
+        
+        // 先检查chatMessages是否为null
+        if (chatMessages == null) {
+            System.err.println("错误: chatMessages为空，无法添加消息");
+            return;
+        }
+        
+        System.out.println("尝试添加消息: ID=" + message.getId() + ", 发送者=" + message.getSender() + 
+                          ", 接收者=" + message.getReceiver() + ", 内容=" + message.getContent());
+        
+        // 先检查消息ID，如果已显示过则跳过
+        if (message.getId() > 0 && displayedMessageIds.contains(message.getId())) {
+            System.out.println("在addMessageToChat中跳过已显示的消息: ID=" + message.getId() + ", 内容=" + message.getContent());
+            return;
+        }
+        
+        // 检查消息是否应该显示在当前聊天窗口
+        String currentPeer = ChatService.getCurrentChatPeer();
+        String messageSender = message.getSender();
+        String messageReceiver = message.getReceiver();
+        
+        // 调试日志
+        System.out.println("处理消息显示: 发送者=" + messageSender + ", 接收者=" + messageReceiver + 
+                           ", 当前聊天对象=" + currentPeer + ", 当前用户=" + username + ", 消息ID=" + message.getId());
+        
+        // 简化消息显示条件，确保消息能够正确显示
+        boolean shouldDisplay = false;
+        
+        // 如果是在聊天窗口(当前有选择的聊天对象)
+        if (currentPeer != null && !currentPeer.isEmpty()) {
+            // 1. 当前用户是发送者，且当前聊天对象是接收者
+            if (username.equals(messageSender) && currentPeer.equals(messageReceiver)) {
+                shouldDisplay = true;
+                System.out.println("显示消息 - 当前用户发送给当前聊天对象的消息");
+            }
+            // 2. 当前用户是接收者，且当前聊天对象是发送者
+            else if (username.equals(messageReceiver) && currentPeer.equals(messageSender)) {
+                shouldDisplay = true;
+                System.out.println("显示消息 - 当前聊天对象发送给当前用户的消息");
+            }
+        }
+        // 如果是在聊天记录页面(无当前聊天对象)
+        else if (currentPeer == null && chatRefreshTimer == null) {
+            shouldDisplay = true;
+            System.out.println("显示消息 - 在聊天记录页面显示所有消息");
+        }
+        
+        // 如果不应该显示，直接返回
+        if (!shouldDisplay) {
+            System.out.println("跳过不应该在当前窗口显示的消息");
+            return;
+        }
+        
+        // 记录消息ID，防止重复显示
+        if (message.getId() > 0) {
+            displayedMessageIds.add(message.getId());
+            System.out.println("记录消息ID: " + message.getId() + " 为已显示");
+        }
+        
+        // 创建消息显示组件
+        HBox messageBox = new HBox();
+        messageBox.setSpacing(10);
+        messageBox.setPadding(new Insets(5));
+        messageBox.setId("msg-" + message.getId()); // 添加ID以便后续查找
+        
+        // 存储时间戳，但确保可以正确比较
+        try {
+            messageBox.setUserData(message.getTimestamp());
+        } catch (Exception e) {
+            System.err.println("无法设置消息时间戳作为userData: " + e.getMessage());
+        }
+        
+        // 判断消息的方向（发送或接收）
+        boolean isOutgoing = messageSender.equals(username);
+        if (isOutgoing) {
+            messageBox.setAlignment(Pos.CENTER_RIGHT);
+            messageBox.getStyleClass().add("outgoing-message");
+        } else {
+            messageBox.setAlignment(Pos.CENTER_LEFT);
+        }
+        
+        // 创建消息内容框
+        VBox messageContentBox = new VBox();
+        messageContentBox.setSpacing(5);
+        messageContentBox.getStyleClass().add("chat-bubble");
+        messageContentBox.setPrefWidth(Control.USE_COMPUTED_SIZE);
+        messageContentBox.setMaxWidth(300);
+        
+        // 添加发送者标签
+        Label senderLabel = new Label(messageSender);
+        senderLabel.getStyleClass().add("chat-sender");
+        
+        // 添加消息内容
+        Label contentLabel = new Label(message.getContent());
+        contentLabel.setWrapText(true);
+        contentLabel.getStyleClass().add("chat-content");
+        
+        // 添加时间标签
+        Label timeLabel = new Label(message.getTimestamp().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+        timeLabel.getStyleClass().add("chat-time");
+        
+        // 组装消息内容框
+        messageContentBox.getChildren().addAll(senderLabel, contentLabel, timeLabel);
+        
+        // 添加头像
+        if (isOutgoing) {
+            Circle avatar = new Circle(20);
+            avatar.getStyleClass().add("user-avatar");
+            Label initials = new Label(messageSender.substring(0, 1).toUpperCase());
+            StackPane avatarPane = new StackPane(avatar, initials);
+            
+            messageBox.getChildren().addAll(messageContentBox, avatarPane);
+        } else {
+            Circle avatar = new Circle(20);
+            avatar.getStyleClass().add("user-avatar");
+            Label initials = new Label(messageSender.substring(0, 1).toUpperCase());
+            StackPane avatarPane = new StackPane(avatar, initials);
+            
+            messageBox.getChildren().addAll(avatarPane, messageContentBox);
+        }
+        
+        // 先直接添加消息到聊天区域，不尝试排序
+        chatMessages.getChildren().add(messageBox);
+        System.out.println("成功添加消息到聊天区域: ID=" + message.getId() + ", 内容=" + message.getContent());
+        
+        // 自动滚动到最新消息
+        chatScrollPane.setVvalue(1.0);
+    }
+
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    private void showError(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    private void loadDiaries(ListView<Diary> diaryListView) {
+        // 清空日记列表
+        diaryListView.getItems().clear();
+        
+        // 获取所有日记
+        List<Diary> diaries = DiaryService.getAllDiaries();
+        
+        // 添加到列表
+        if (diaries != null && !diaries.isEmpty()) {
+            diaryListView.getItems().addAll(diaries);
+        }
+    }
+
+    private void loadFilteredDiaries(ListView<Diary> diaryListView, String keyword, LocalDate startDate, LocalDate endDate) {
+        // 清空日记列表
+        diaryListView.getItems().clear();
+        
+        // 准备查询参数
+        String startDateStr = startDate != null ? startDate.toString() : null;
+        String endDateStr = endDate != null ? endDate.toString() : null;
+        
+        // 获取筛选后的日记
+        List<Diary> diaries = DiaryService.searchDiaries(keyword, startDateStr, endDateStr);
+        
+        // 添加到列表
+        if (diaries != null && !diaries.isEmpty()) {
+            diaryListView.getItems().addAll(diaries);
+        }
+    }
+
     private void refreshOnlineUsers() {
         if (isServerMode) {
             List<String> users = ChatService.getOnlineUsers();
@@ -691,318 +1196,404 @@ public class Main extends Application {
             });
         }
     }
-    
-    // 直接连接模式的聊天界面
-    private void openDirectModeChat(StackPane content) {
-        // 创建主布局
-        VBox chatLayout = new VBox(15);
-        chatLayout.setPadding(new Insets(15));
-        chatLayout.setFillWidth(true);
-        chatLayout.setAlignment(Pos.TOP_CENTER);
-        
-        // 创建标题
-        Label titleLabel = new Label("实时聊天");
-        titleLabel.setFont(Font.font("System", FontWeight.BOLD, 20));
-        titleLabel.setTextFill(Color.WHITE);
-        
-        // 创建连接部分
-        HBox connectionBox = new HBox(10);
-        connectionBox.setAlignment(Pos.CENTER_LEFT);
-        connectionBox.setStyle("-fx-background-color: #34495E; -fx-padding: 15; -fx-background-radius: 5;");
-        connectionBox.setMaxWidth(Double.MAX_VALUE);
-        
-        Label myIpLabel = new Label("我的IP: " + ChatService.getLocalIpAddress());
-        myIpLabel.setTextFill(Color.WHITE);
-        
-        Label peerIpLabel = new Label("对方IP:");
-        peerIpLabel.setTextFill(Color.WHITE);
-        
-        peerIpField = new TextField();
-        peerIpField.setPromptText("输入对方IP地址");
-        peerIpField.setPrefWidth(200);
-        HBox.setHgrow(peerIpField, Priority.ALWAYS);
-        
-        connectButton = new Button("连接");
-        connectButton.setOnAction(e -> connectToPeer());
-        
-        connectionStatusLabel = new Label("未连接");
-        connectionStatusLabel.setTextFill(Color.RED);
-        
-        connectionBox.getChildren().addAll(myIpLabel, peerIpLabel, peerIpField, connectButton, connectionStatusLabel);
-        
-        // 创建聊天消息区域
-        VBox chatContainer = new VBox(10);
-        chatContainer.setStyle("-fx-background-color: #34495E; -fx-padding: 15; -fx-background-radius: 5;");
-        chatContainer.setMaxWidth(Double.MAX_VALUE);
-        chatContainer.setMaxHeight(Double.MAX_VALUE);
-        VBox.setVgrow(chatContainer, Priority.ALWAYS);
-        
-        // 创建聊天消息显示区域
-        chatMessagesBox = new VBox(10);
-        chatMessagesBox.setPadding(new Insets(10));
-        chatMessagesBox.setMaxWidth(Double.MAX_VALUE);
-        chatMessagesBox.setMaxHeight(Double.MAX_VALUE);
-        
-        chatScrollPane = new ScrollPane(chatMessagesBox);
-        chatScrollPane.setFitToWidth(true);
-        chatScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        chatScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        chatScrollPane.setPrefHeight(350);
-        chatScrollPane.setMaxHeight(Double.MAX_VALUE);
-        VBox.setVgrow(chatScrollPane, Priority.ALWAYS);
-        
-        // 创建消息输入区域
-        HBox messageInputBox = new HBox(10);
-        messageInputBox.setAlignment(Pos.CENTER);
-        
-        messageField = new TextField();
-        messageField.setPromptText("输入消息...");
-        messageField.setPrefWidth(500);
-        messageField.setOnAction(e -> sendMessage()); // 按Enter发送消息
-        HBox.setHgrow(messageField, Priority.ALWAYS);
-        
-        Button sendButton = new Button("发送");
-        sendButton.setOnAction(e -> sendMessage());
-        
-        messageInputBox.getChildren().addAll(messageField, sendButton);
-        
-        // 将所有组件添加到聊天容器
-        chatContainer.getChildren().addAll(chatScrollPane, messageInputBox);
-        
-        // 将所有组件添加到主布局
-        chatLayout.getChildren().addAll(titleLabel, connectionBox, chatContainer);
-        
-        // 更新内容区域
-        content.getChildren().clear();
-        content.getChildren().add(chatLayout);
-        
-        // 如果已经连接过，加载聊天历史
-        if (currentPeer != null) {
-            loadChatHistory(currentPeer);
-        }
+
+    private void requestServerInfo() {
+        // Implementation of requestServerInfo method
     }
-    
-    // 连接到对方
-    private void connectToPeer() {
-        String peerIp = peerIpField.getText().trim();
-        if (peerIp.isEmpty()) {
-            showAlert("错误", "请输入对方的IP地址");
-            return;
+
+    private void openLogs() {
+        mainContent.getChildren().clear();
+        
+        VBox logsPanel = new VBox();
+        logsPanel.getStyleClass().addAll("content-box", "responsive-container");
+        logsPanel.setSpacing(15);
+        logsPanel.setPadding(new Insets(15));
+        VBox.setVgrow(logsPanel, Priority.ALWAYS);
+        HBox.setHgrow(logsPanel, Priority.ALWAYS);
+        
+        Label titleLabel = new Label("聊天记录");
+        titleLabel.getStyleClass().add("title-label");
+        
+        // 创建搜索区域
+        HBox searchBox = new HBox();
+        searchBox.setSpacing(10);
+        searchBox.setAlignment(Pos.CENTER_LEFT);
+        searchBox.getStyleClass().add("content-box");
+        searchBox.setPadding(new Insets(10));
+        
+        TextField searchField = new TextField();
+        searchField.setPromptText("搜索关键词...");
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+        
+        Button searchButton = new Button("搜索");
+        searchButton.getStyleClass().add("button");
+        
+        searchBox.getChildren().addAll(searchField, searchButton);
+        
+        // 创建聊天记录区域
+        VBox logsArea = new VBox();
+        logsArea.setSpacing(10);
+        logsArea.getStyleClass().add("content-box");
+        logsArea.setPadding(new Insets(10));
+        VBox.setVgrow(logsArea, Priority.ALWAYS);
+        
+        ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
+        
+        VBox logsContainer = new VBox();
+        logsContainer.setSpacing(10);
+        logsContainer.setPadding(new Insets(10));
+        
+        scrollPane.setContent(logsContainer);
+        logsArea.getChildren().add(scrollPane);
+        
+        // 加载聊天记录
+        List<ChatMessage> messages = ChatService.getChatHistory();
+        if (messages != null && !messages.isEmpty()) {
+            for (ChatMessage message : messages) {
+                HBox messageBox = new HBox();
+                messageBox.setSpacing(10);
+                messageBox.setPadding(new Insets(5));
+                messageBox.setAlignment(Pos.CENTER_LEFT);
+                
+                VBox messageContentBox = new VBox();
+                messageContentBox.setSpacing(5);
+                messageContentBox.getStyleClass().add("chat-bubble");
+                messageContentBox.setPrefWidth(Control.USE_COMPUTED_SIZE);
+                messageContentBox.setMaxWidth(500);
+                
+                Label senderLabel = new Label(message.getSender());
+                senderLabel.getStyleClass().add("chat-sender");
+                
+                Label contentLabel = new Label(message.getContent());
+                contentLabel.setWrapText(true);
+                contentLabel.getStyleClass().add("chat-content");
+                
+                Label timeLabel = new Label(message.getTimestamp().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+                timeLabel.getStyleClass().add("chat-time");
+                
+                messageContentBox.getChildren().addAll(senderLabel, contentLabel, timeLabel);
+                messageBox.getChildren().add(messageContentBox);
+                
+                logsContainer.getChildren().add(messageBox);
+            }
+        } else {
+            Label noLogsLabel = new Label("没有聊天记录");
+            noLogsLabel.setAlignment(Pos.CENTER);
+            noLogsLabel.setMaxWidth(Double.MAX_VALUE);
+            logsContainer.getChildren().add(noLogsLabel);
         }
         
-        boolean connected = ChatService.connectToPeer(peerIp, username);
-        if (connected) {
-            connectionStatusLabel.setText("已连接");
-            connectionStatusLabel.setTextFill(Color.GREEN);
-            connectButton.setDisable(true);
-            currentPeer = peerIp;
+        // 创建操作按钮区域
+        HBox buttonsBox = new HBox();
+        buttonsBox.setSpacing(10);
+        buttonsBox.setAlignment(Pos.CENTER_RIGHT);
+        buttonsBox.setPadding(new Insets(10));
+        
+        Button refreshButton = new Button("刷新");
+        refreshButton.getStyleClass().add("sync-button");
+        refreshButton.setOnAction(e -> {
+            // 重新加载聊天记录
+            openLogs();
+        });
+        
+        Button clearButton = new Button("清空");
+        clearButton.getStyleClass().add("delete-button");
+        clearButton.setOnAction(e -> {
+            // 确认清空
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("确认清空");
+            alert.setHeaderText("您确定要清空聊天记录吗？");
+            alert.setContentText("此操作不可撤销。");
             
-            // 加载聊天历史
-            loadChatHistory(peerIp);
-        } else {
-            connectionStatusLabel.setText("连接失败");
-            connectionStatusLabel.setTextFill(Color.RED);
+            Optional<ButtonType> result = alert.showAndWait();
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                // 清空聊天记录
+                ChatService.clearChatHistory();
+                openLogs();
+            }
+        });
+        
+        buttonsBox.getChildren().addAll(refreshButton, clearButton);
+        
+        // 添加所有组件到主面板
+        logsPanel.getChildren().addAll(titleLabel, searchBox, logsArea, buttonsBox);
+        
+        // 将主面板添加到主内容区
+        mainContent.getChildren().add(logsPanel);
+        
+        // 搜索功能
+        searchButton.setOnAction(e -> {
+            String keyword = searchField.getText().trim();
+            if (!keyword.isEmpty()) {
+                List<ChatMessage> filteredMessages = ChatService.searchChatHistory(keyword);
+                
+                // 清空当前显示的消息
+                logsContainer.getChildren().clear();
+                
+                if (filteredMessages != null && !filteredMessages.isEmpty()) {
+                    for (ChatMessage message : filteredMessages) {
+                        HBox messageBox = new HBox();
+                        messageBox.setSpacing(10);
+                        messageBox.setPadding(new Insets(5));
+                        messageBox.setAlignment(Pos.CENTER_LEFT);
+                        
+                        VBox messageContentBox = new VBox();
+                        messageContentBox.setSpacing(5);
+                        messageContentBox.getStyleClass().add("chat-bubble");
+                        messageContentBox.setPrefWidth(Control.USE_COMPUTED_SIZE);
+                        messageContentBox.setMaxWidth(500);
+                        
+                        Label senderLabel = new Label(message.getSender());
+                        senderLabel.getStyleClass().add("chat-sender");
+                        
+                        Label contentLabel = new Label(message.getContent());
+                        contentLabel.setWrapText(true);
+                        contentLabel.getStyleClass().add("chat-content");
+                        
+                        Label timeLabel = new Label(message.getTimestamp().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+                        timeLabel.getStyleClass().add("chat-time");
+                        
+                        messageContentBox.getChildren().addAll(senderLabel, contentLabel, timeLabel);
+                        messageBox.getChildren().add(messageContentBox);
+                        
+                        logsContainer.getChildren().add(messageBox);
+                    }
+                } else {
+                    Label noLogsLabel = new Label("没有找到匹配的聊天记录");
+                    noLogsLabel.setAlignment(Pos.CENTER);
+                    noLogsLabel.setMaxWidth(Double.MAX_VALUE);
+                    logsContainer.getChildren().add(noLogsLabel);
+                }
+            } else {
+                // 如果搜索关键词为空，显示所有聊天记录
+                openLogs();
+            }
+        });
+    }
+
+    private void showChatWithUser(String username) {
+        System.out.println("加载与用户 " + username + " 的聊天历史");
+        
+        // 在UI线程中执行更新
+        Platform.runLater(() -> {
+            try {
+                // 更新当前聊天对象
+                ChatService.setCurrentChatPeer(username);
+                System.out.println("已设置当前聊天对象为: " + username);
+                
+                // 清空历史消息显示区
+                if (chatMessages != null) {
+                    chatMessages.getChildren().clear();
+                    System.out.println("已清空聊天消息显示区");
+                } else {
+                    System.err.println("错误: chatMessages为null");
+                }
+                
+                // 清空已显示消息ID集合，确保能加载所有历史消息
+                displayedMessageIds.clear();
+                System.out.println("已清空已显示消息ID集合");
+                
+                // 提示正在加载
+                Label loadingLabel = new Label("正在加载聊天历史...");
+                loadingLabel.getStyleClass().add("info-label");
+                loadingLabel.setAlignment(Pos.CENTER);
+                loadingLabel.setMaxWidth(Double.MAX_VALUE);
+                chatMessages.getChildren().add(loadingLabel);
+                
+                // 使用新的刷新方法，加载所有历史
+                new Thread(() -> refreshChatWithUser(username, true)).start();
+                
+                // 清除该用户的未读标记
+                clearUnreadBadge(username);
+                
+                // 刷新界面
+                onlineUsersListView.refresh();
+            } catch (Exception e) {
+                System.err.println("加载聊天历史时出错: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
+    }
+
+    // 设置用户接收新消息的回调
+    private void setOnNewMessage(String user, Runnable callback) {
+        // 存储回调以在接收到消息时调用
+        if (!messageCallbacks.containsKey(user)) {
+            messageCallbacks.put(user, callback);
         }
     }
-    
-    // 加载聊天历史
-    private void loadChatHistory(String peerIp) {
-        chatMessagesBox.getChildren().clear();
-        
-        List<ChatMessage> messages = ChatService.getChatHistory(peerIp);
-        for (ChatMessage message : messages) {
-            addMessageToChat(message);
-        }
-        
-        // 滚动到底部
-        Platform.runLater(() -> chatScrollPane.setVvalue(1.0));
-    }
-    
-    // 发送消息
-    private void sendMessage() {
-        String messageContent = messageField.getText().trim();
-        if (messageContent.isEmpty()) {
-            return;
-        }
-        
-        boolean sent = ChatService.sendMessage(messageContent);
-        if (sent) {
-            messageField.clear();
+
+    // 清除用户的未读标记
+    private void clearUnreadBadge(String user) {
+        // 在UI中刷新用户列表项，移除未读标记
+        Platform.runLater(() -> {
+            onlineUsersListView.refresh();
             
-            // 刷新聊天历史
-            loadChatHistory(currentPeer);
-        } else {
-            showAlert("错误", "发送消息失败，请确保已连接到对方");
+            // 使用safer方式处理UI元素
+            for (int i = 0; i < onlineUsersListView.getItems().size(); i++) {
+                if (onlineUsersListView.getItems().get(i).equals(user)) {
+                    // 简单地刷新整个列表而不是尝试直接修改标记
+                    // 因为对单元格的直接访问和修改是不可靠的
+                    break;
+                }
+            }
+        });
+    }
+
+    // 修改refreshChatWithUser方法确保显示完整历史
+    private void refreshChatWithUser(String username, boolean clearHistory) {
+        System.out.println("刷新与用户 " + username + " 的聊天历史" + (clearHistory ? "(加载全部)" : "(增量更新)"));
+        
+        try {
+            if (chatMessages == null) {
+                System.err.println("错误: chatMessages为null，无法刷新聊天");
+                return;
+            }
+            
+            // 如果需要清空历史，则清空消息显示区
+            if (clearHistory) {
+                Platform.runLater(() -> {
+                    chatMessages.getChildren().clear();
+                    System.out.println("已清空聊天消息显示区");
+                });
+            }
+            
+            // 加载与该用户的聊天历史
+            List<ChatMessage> history;
+            if (clearHistory) {
+                // 清空历史时获取所有消息
+                history = ChatService.getChatHistory(username);
+                System.out.println("加载全部历史消息: " + (history != null ? history.size() : 0) + " 条");
+            } else {
+                // 只获取最近15秒的消息避免重复，用于实时更新
+                history = ChatService.getNewChatHistory(username, LocalDateTime.now().minusSeconds(15));
+                System.out.println("加载增量消息: " + (history != null ? history.size() : 0) + " 条");
+            }
+            
+            if (history != null && !history.isEmpty()) {
+                System.out.println("找到 " + history.size() + " 条历史消息");
+                
+                // 确保消息按照时间戳排序
+                history.sort((m1, m2) -> m1.getTimestamp().compareTo(m2.getTimestamp()));
+                
+                // 如果是清除历史模式，先清除"正在加载"标签
+                if (clearHistory) {
+                    Platform.runLater(() -> {
+                        chatMessages.getChildren().clear();
+                    });
+                }
+                
+                // 处理消息
+                for (ChatMessage msg : history) {
+                    // 只有增量更新时才跳过已显示的消息
+                    if (!clearHistory && msg.getId() > 0 && displayedMessageIds.contains(msg.getId())) {
+                        System.out.println("跳过已显示的消息ID: " + msg.getId() + ", 内容: " + msg.getContent());
+                        continue;
+                    }
+                    
+                    // 确保只显示与当前用户和选定聊天对象相关的消息
+                    if ((msg.getSender().equals(this.username) && msg.getReceiver().equals(username)) ||
+                        (msg.getSender().equals(username) && msg.getReceiver().equals(this.username))) {
+                        
+                        // 显示消息
+                        Platform.runLater(() -> addMessageToChat(msg));
+                    }
+                }
+            } else if (clearHistory) {
+                // 显示无历史消息提示
+                Platform.runLater(() -> {
+                    chatMessages.getChildren().clear();
+                    Label noMessagesLabel = new Label("还没有与该用户的聊天记录，发送消息开始对话吧");
+                    noMessagesLabel.getStyleClass().add("info-label");
+                    noMessagesLabel.setAlignment(Pos.CENTER);
+                    noMessagesLabel.setMaxWidth(Double.MAX_VALUE);
+                    chatMessages.getChildren().add(noMessagesLabel);
+                });
+            }
+        } catch (Exception e) {
+            System.err.println("刷新聊天历史时出错: " + e.getMessage());
+            e.printStackTrace();
         }
     }
-    
-    // 添加消息到聊天界面
-    private void addMessageToChat(ChatMessage message) {
-        HBox messageBox = new HBox(10);
-        messageBox.setPadding(new Insets(5));
-        messageBox.setMaxWidth(Double.MAX_VALUE);
+
+    // 添加一个菜单项显示数据库信息
+    private void addDatabaseInfoMenuItem(Menu settingsMenu) {
+        MenuItem dbInfoItem = new MenuItem("数据库信息");
+        dbInfoItem.setOnAction(e -> {
+            String dbPath = DBUtil.getDatabasePath();
+            boolean isConnected = DBUtil.testConnection();
+            
+            Alert dbInfoAlert = new Alert(Alert.AlertType.INFORMATION);
+            dbInfoAlert.setTitle("数据库信息");
+            dbInfoAlert.setHeaderText("应用数据存储位置");
+            
+            VBox content = new VBox(5);
+            content.setPadding(new Insets(10));
+            
+            Label pathLabel = new Label("您的聊天数据存储在:");
+            Label locationLabel = new Label(dbPath);
+            locationLabel.setStyle("-fx-font-weight: bold;");
+            
+            Label statusLabel = new Label("数据库连接状态: " + (isConnected ? "正常" : "异常"));
+            statusLabel.setStyle("-fx-text-fill: " + (isConnected ? "green" : "red") + "; -fx-font-weight: bold;");
+            
+            HBox actionsBox = new HBox(10);
+            actionsBox.setAlignment(Pos.CENTER);
+            
+            Button openFolderButton = new Button("打开数据目录");
+            openFolderButton.setOnAction(event -> {
+                try {
+                    File dbFile = new File(dbPath);
+                    File parentDir = dbFile.getParentFile();
+                    if (parentDir != null && parentDir.exists()) {
+                        Desktop.getDesktop().open(parentDir);
+                    } else {
+                        showError("错误", "数据目录不存在: " + (parentDir != null ? parentDir.getAbsolutePath() : "未知"));
+                    }
+                } catch (Exception ex) {
+                    showError("错误", "无法打开数据目录: " + ex.getMessage());
+                }
+            });
+            
+            Button backupButton = new Button("备份数据库");
+            backupButton.setOnAction(event -> {
+                try {
+                    // 创建备份文件名
+                    String timestamp = LocalDateTime.now().format(
+                        DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                    File dbFile = new File(dbPath);
+                    String backupPath = dbFile.getParent() + File.separator + "backup_" + timestamp + "_app.db";
+                    
+                    // 复制文件
+                    Files.copy(dbFile.toPath(), new File(backupPath).toPath());
+                    
+                    showInfo("备份成功", "已创建数据库备份:\n" + backupPath);
+                } catch (Exception ex) {
+                    showError("备份失败", "无法创建数据库备份: " + ex.getMessage());
+                }
+            });
+            
+            actionsBox.getChildren().addAll(openFolderButton, backupButton);
+            
+            content.getChildren().addAll(pathLabel, locationLabel, statusLabel, new Separator(), actionsBox);
+            
+            dbInfoAlert.getDialogPane().setContent(content);
+            dbInfoAlert.showAndWait();
+        });
         
-        VBox messageContent = new VBox(5);
-        messageContent.setPadding(new Insets(10));
-        messageContent.setMaxWidth(500);
-        
-        Label senderLabel = new Label(message.getSender() + ":");
-        senderLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
-        
-        Label contentLabel = new Label(message.getContent());
-        contentLabel.setWrapText(true);
-        contentLabel.setMaxWidth(Double.MAX_VALUE);
-        
-        Label timeLabel = new Label(message.getTimestamp().substring(0, 16)); // 只显示日期和时间
-        timeLabel.setFont(Font.font("System", FontWeight.LIGHT, 10));
-        timeLabel.setTextFill(Color.GRAY);
-        
-        messageContent.getChildren().addAll(senderLabel, contentLabel, timeLabel);
-        
-        // 根据发送者调整消息的对齐方式
-        if (message.getSender().equals(username)) {
-            messageBox.setAlignment(Pos.CENTER_RIGHT);
-            messageContent.setStyle("-fx-background-color: #DCF8C6; -fx-padding: 10; -fx-background-radius: 10 0 10 10;");
-            messageBox.getChildren().add(messageContent);
-        } else {
-            messageBox.setAlignment(Pos.CENTER_LEFT);
-            messageContent.setStyle("-fx-background-color: #FFFFFF; -fx-padding: 10; -fx-background-radius: 0 10 10 10;");
-            messageBox.getChildren().add(messageContent);
-        }
-        
-        chatMessagesBox.getChildren().add(messageBox);
-        
-        // 滚动到底部
-        Platform.runLater(() -> chatScrollPane.setVvalue(1.0));
+        settingsMenu.getItems().add(dbInfoItem);
     }
-    
-    // 显示警告对话框
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.WARNING);
+
+    // 显示信息对话框
+    private void showInfo(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
-    }
-
-    // 控制侧边栏展开/收缩
-    private void toggleSidebar(VBox sidebar) {
-        double targetWidth = isSidebarExpanded ? 0 : 200;
-        
-        // 使用动画平滑过渡
-        Timeline timeline = new Timeline();
-        KeyValue kv = new KeyValue(sidebar.prefWidthProperty(), targetWidth, Interpolator.EASE_BOTH);
-        KeyFrame kf = new KeyFrame(Duration.millis(300), kv);
-        timeline.getKeyFrames().add(kf);
-        timeline.play();
-        
-        // 更改展开状态
-        isSidebarExpanded = !isSidebarExpanded;
-    }
-
-    // 打开批量删除对话框
-    private void openBatchDeleteDialog(ListView<HBox> diaryListView, String keyword, String startDate, String endDate) {
-        // 创建对话框
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("批量删除日记");
-        dialog.setHeaderText("选择要删除的日记");
-        
-        // 设置按钮
-        ButtonType deleteButtonType = new ButtonType("删除选中", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(deleteButtonType, ButtonType.CANCEL);
-        
-        // 创建内容区域
-        VBox content = new VBox(10);
-        content.setPadding(new Insets(20));
-        content.setPrefWidth(500);
-        content.setPrefHeight(400);
-        
-        // 获取日记列表
-        List<Diary> diaries;
-        if (keyword != null || startDate != null || endDate != null) {
-            diaries = DiaryService.searchDiaries(keyword, startDate, endDate);
-        } else {
-            diaries = DiaryService.getAllDiaries();
-        }
-        
-        // 创建复选框列表
-        VBox checkboxList = new VBox(5);
-        List<CheckBox> checkBoxes = new ArrayList<>();
-        
-        for (Diary diary : diaries) {
-            CheckBox checkBox = new CheckBox();
-            
-            HBox item = new HBox(10);
-            item.setAlignment(Pos.CENTER_LEFT);
-            item.setPadding(new Insets(5));
-            item.getStyleClass().add("diary-item");
-            
-            VBox diaryInfo = new VBox(3);
-            Label dateLabel = new Label("日期: " + diary.getDate());
-            dateLabel.getStyleClass().add("diary-date");
-            
-            Label contentLabel = new Label(diary.getContent().length() > 50 ? 
-                    diary.getContent().substring(0, 50) + "..." : diary.getContent());
-            contentLabel.setWrapText(true);
-            contentLabel.getStyleClass().add("diary-content");
-            
-            diaryInfo.getChildren().addAll(dateLabel, contentLabel);
-            
-            item.getChildren().addAll(checkBox, diaryInfo);
-            
-            checkBoxes.add(checkBox);
-            checkboxList.getChildren().add(item);
-        }
-        
-        // 创建全选/取消全选复选框
-        CheckBox selectAllCheckBox = new CheckBox("全选/取消全选");
-        selectAllCheckBox.setOnAction(e -> {
-            boolean selected = selectAllCheckBox.isSelected();
-            for (CheckBox cb : checkBoxes) {
-                cb.setSelected(selected);
-            }
-        });
-        
-        // 添加到内容区域
-        content.getChildren().addAll(selectAllCheckBox, new Separator(), checkboxList);
-        
-        // 创建滚动面板
-        ScrollPane scrollPane = new ScrollPane(content);
-        scrollPane.setFitToWidth(true);
-        
-        dialog.getDialogPane().setContent(scrollPane);
-        
-        // 处理结果
-        Optional<ButtonType> result = dialog.showAndWait();
-        if (result.isPresent() && result.get() == deleteButtonType) {
-            // 确认删除
-            Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
-            confirmAlert.setTitle("确认删除");
-            
-            // 计算选中的数量
-            int selectedCount = 0;
-            for (CheckBox cb : checkBoxes) {
-                if (cb.isSelected()) {
-                    selectedCount++;
-                }
-            }
-            
-            confirmAlert.setHeaderText("您确定要删除选中的 " + selectedCount + " 条日记吗？");
-            confirmAlert.setContentText("此操作不可撤销。");
-            
-            Optional<ButtonType> confirmResult = confirmAlert.showAndWait();
-            if (confirmResult.isPresent() && confirmResult.get() == ButtonType.OK) {
-                // 执行删除
-                for (int i = 0; i < checkBoxes.size(); i++) {
-                    if (checkBoxes.get(i).isSelected()) {
-                        DiaryService.deleteDiary(diaries.get(i).getId());
-                    }
-                }
-                
-                // 刷新列表
-                loadDiaries(diaryListView, keyword, startDate, endDate);
-            }
-        }
     }
 
     public static void main(String[] args) {
