@@ -143,32 +143,55 @@ public class DiaryService {
     
     // 根据关键词和日期过滤日记 - 直接从云端搜索
     public static List<Diary> searchDiaries(String keyword, String startDate, String endDate) {
-        logger.info("从云端搜索日记，关键词=" + keyword + ", 开始日期=" + startDate + ", 结束日期=" + endDate);
+        logger.info("从云端搜索日记，关键词=\"" + keyword + "\", 开始日期=\"" + startDate + "\", 结束日期=\"" + endDate + "\"");
         
         try {
+            // 如果没有搜索条件，直接返回所有日记
+            if ((keyword == null || keyword.isEmpty()) && 
+                (startDate == null || startDate.isEmpty()) && 
+                (endDate == null || endDate.isEmpty())) {
+                logger.info("没有提供搜索条件，返回所有日记");
+                return getAllDiaries();
+            }
+            
             // 构建URL
             StringBuilder urlBuilder = new StringBuilder(API_BASE_URL + "/diaries/search?");
             
             // 添加搜索参数
+            boolean hasParams = false;
+            
             if (keyword != null && !keyword.isEmpty()) {
-                urlBuilder.append("keyword=").append(java.net.URLEncoder.encode(keyword, StandardCharsets.UTF_8.name())).append("&");
+                urlBuilder.append("keyword=").append(java.net.URLEncoder.encode(keyword, StandardCharsets.UTF_8.name()));
+                hasParams = true;
+                logger.info("添加关键词搜索参数: " + keyword);
             }
             
             if (startDate != null && !startDate.isEmpty()) {
-                urlBuilder.append("startDate=").append(java.net.URLEncoder.encode(startDate, StandardCharsets.UTF_8.name())).append("&");
+                if (hasParams) urlBuilder.append("&");
+                urlBuilder.append("startDate=").append(java.net.URLEncoder.encode(startDate, StandardCharsets.UTF_8.name()));
+                hasParams = true;
+                logger.info("添加开始日期搜索参数: " + startDate);
             }
             
             if (endDate != null && !endDate.isEmpty()) {
-                urlBuilder.append("endDate=").append(java.net.URLEncoder.encode(endDate, StandardCharsets.UTF_8.name())).append("&");
+                if (hasParams) urlBuilder.append("&");
+                urlBuilder.append("endDate=").append(java.net.URLEncoder.encode(endDate, StandardCharsets.UTF_8.name()));
+                hasParams = true;
+                logger.info("添加结束日期搜索参数: " + endDate);
             }
             
             // 添加用户标识参数
             String currentUser = ApiService.getCurrentUser();
             if (currentUser != null && !currentUser.isEmpty()) {
+                if (hasParams) urlBuilder.append("&");
                 urlBuilder.append("user=").append(java.net.URLEncoder.encode(currentUser, StandardCharsets.UTF_8.name()));
+                logger.info("添加用户参数: " + currentUser);
             }
             
-            URL url = new URL(urlBuilder.toString());
+            String finalUrl = urlBuilder.toString();
+            logger.info("构建的搜索URL: " + finalUrl);
+            
+            URL url = new URL(finalUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("Accept", "application/json");
@@ -177,6 +200,8 @@ public class DiaryService {
             
             List<Diary> diaries = new ArrayList<>();
             int responseCode = conn.getResponseCode();
+            logger.info("搜索请求响应码: " + responseCode);
+            
             if (responseCode >= 200 && responseCode < 300) {
                 // 读取响应
                 StringBuilder response = new StringBuilder();
@@ -191,9 +216,15 @@ public class DiaryService {
                 // 解析JSON
                 String jsonStr = response.toString();
                 logger.info("通过API搜索到日记，响应长度: " + jsonStr.length() + " 字节");
+                logger.fine("搜索响应内容: " + jsonStr);
                 
                 // 简单解析JSON数组
                 if (jsonStr.startsWith("[") && jsonStr.endsWith("]")) {
+                    if (jsonStr.equals("[]")) {
+                        logger.info("搜索结果为空");
+                        return diaries;
+                    }
+                    
                     String[] items = jsonStr.substring(1, jsonStr.length() - 1).split("\\},\\{");
                     logger.info("解析到 " + items.length + " 条日记");
                     
@@ -210,13 +241,30 @@ public class DiaryService {
                         String timestamp = extractStringField(item, "timestamp");
                         String tags = extractStringField(item, "tags");
                         
-                        diaries.add(new Diary(id, date, content, timestamp, tags));
+                        Diary diary = new Diary(id, date, content, timestamp, tags);
+                        diaries.add(diary);
+                        logger.info("搜索到日记: ID=" + id + ", 日期=" + diary.getDate());
                     }
                 }
             } else {
-                logger.severe("搜索日记失败: " + responseCode + " - " + conn.getResponseMessage());
+                // 出错时记录详细信息
+                String errorMsg = "";
+                try (BufferedReader br = new BufferedReader(
+                        new InputStreamReader(conn.getErrorStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    StringBuilder errResponse = new StringBuilder();
+                    while ((line = br.readLine()) != null) {
+                        errResponse.append(line);
+                    }
+                    errorMsg = errResponse.toString();
+                } catch (Exception e) {
+                    errorMsg = "无法读取错误响应";
+                }
+                
+                logger.severe("搜索日记失败: " + responseCode + " - " + conn.getResponseMessage() + "; 错误详情: " + errorMsg);
             }
             
+            logger.info("搜索结果返回 " + diaries.size() + " 条日记");
             return diaries;
         } catch (Exception e) {
             logger.severe("搜索日记时发生异常: " + e.getMessage());

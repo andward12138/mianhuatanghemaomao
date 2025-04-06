@@ -49,6 +49,11 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 
 public class Main extends Application {
 
@@ -1146,16 +1151,42 @@ public class Main extends Application {
         // 清空日记列表
         diaryListView.getItems().clear();
         
+        System.out.println("执行搜索: 关键词=\"" + keyword + "\", 开始日期=" + startDate + ", 结束日期=" + endDate);
+        
+        // 检查搜索参数，确保空字符串被转为null
+        if (keyword != null && keyword.trim().isEmpty()) {
+            keyword = null;
+        }
+        
         // 准备查询参数
         String startDateStr = startDate != null ? startDate.toString() : null;
         String endDateStr = endDate != null ? endDate.toString() : null;
+        
+        // 如果全部参数为空，提示用户至少输入一项搜索条件
+        if ((keyword == null || keyword.isEmpty()) && 
+            (startDateStr == null || startDateStr.isEmpty()) && 
+            (endDateStr == null || endDateStr.isEmpty())) {
+            // 直接加载所有日记
+            loadDiaries(diaryListView);
+            return;
+        }
         
         // 获取筛选后的日记
         List<Diary> diaries = DiaryService.searchDiaries(keyword, startDateStr, endDateStr);
         
         // 添加到列表
         if (diaries != null && !diaries.isEmpty()) {
+            System.out.println("搜索结果: 找到" + diaries.size() + "条日记");
             diaryListView.getItems().addAll(diaries);
+        } else {
+            System.out.println("搜索结果: 没有找到匹配的日记");
+            // 显示无结果提示
+            Label noResultLabel = new Label("没有找到匹配的日记记录");
+            noResultLabel.setMaxWidth(Double.MAX_VALUE);
+            noResultLabel.setAlignment(Pos.CENTER);
+            noResultLabel.setPadding(new Insets(20));
+            noResultLabel.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+            diaryListView.setPlaceholder(noResultLabel);
         }
     }
 
