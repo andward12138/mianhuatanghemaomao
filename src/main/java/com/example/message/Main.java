@@ -861,6 +861,10 @@ public class Main extends Application {
                         // 禁用发送按钮防止重复发送
                         sendButton.setDisable(true);
                         
+                        // 记录当前时间，用于后续检查消息是否已显示
+                        final long sentTime = System.currentTimeMillis();
+                        System.out.println("发送消息时间戳: " + sentTime);
+                        
                         // 发送消息给当前选中的用户
                         ChatService.sendPrivateMessage(currentPeer, message);
                         messageInput.clear();
@@ -868,6 +872,7 @@ public class Main extends Application {
                         // 自动滚动到最新消息
                         Platform.runLater(() -> {
                             chatScrollPane.setVvalue(1.0);
+                            
                             // 短暂延迟后重新启用发送按钮
                             new Thread(() -> {
                                 try {
@@ -984,9 +989,8 @@ public class Main extends Application {
     }
 
     private void addMessageToChat(ChatMessage message) {
-        // 确保在JavaFX主线程中执行
-        if (!Platform.isFxApplicationThread()) {
-            Platform.runLater(() -> addMessageToChat(message));
+        if (message == null) {
+            System.err.println("错误: 消息对象为空");
             return;
         }
         
@@ -999,8 +1003,9 @@ public class Main extends Application {
         System.out.println("尝试添加消息: ID=" + message.getId() + ", 发送者=" + message.getSender() + 
                           ", 接收者=" + message.getReceiver() + ", 内容=" + message.getContent());
         
-        // 先检查消息ID，如果已显示过则跳过
-        if (message.getId() > 0 && displayedMessageIds.contains(message.getId())) {
+        // 先检查消息ID，如果已显示过则跳过，但自己发送的新消息总是显示
+        boolean isSelfSent = message.getSender().equals(username);
+        if (message.getId() > 0 && displayedMessageIds.contains(message.getId()) && !isSelfSent) {
             System.out.println("在addMessageToChat中跳过已显示的消息: ID=" + message.getId() + ", 内容=" + message.getContent());
             return;
         }
@@ -1014,18 +1019,18 @@ public class Main extends Application {
         System.out.println("处理消息显示: 发送者=" + messageSender + ", 接收者=" + messageReceiver + 
                            ", 当前聊天对象=" + currentPeer + ", 当前用户=" + username + ", 消息ID=" + message.getId());
         
-        // 简化消息显示条件，确保消息能够正确显示
+        // 优化消息显示条件，确保消息能够正确显示（特别是自己发送的消息总是显示）
         boolean shouldDisplay = false;
         
+        // 如果是当前用户发送的消息，并且接收者是当前聊天对象，总是显示
+        if (username.equals(messageSender) && currentPeer != null && currentPeer.equals(messageReceiver)) {
+            shouldDisplay = true;
+            System.out.println("显示消息 - 当前用户发送给当前聊天对象的消息 (优先级高)");
+        }
         // 如果是在聊天窗口(当前有选择的聊天对象)
-        if (currentPeer != null && !currentPeer.isEmpty()) {
-            // 1. 当前用户是发送者，且当前聊天对象是接收者
-            if (username.equals(messageSender) && currentPeer.equals(messageReceiver)) {
-                shouldDisplay = true;
-                System.out.println("显示消息 - 当前用户发送给当前聊天对象的消息");
-            }
-            // 2. 当前用户是接收者，且当前聊天对象是发送者
-            else if (username.equals(messageReceiver) && currentPeer.equals(messageSender)) {
+        else if (currentPeer != null && !currentPeer.isEmpty()) {
+            // 当前用户是接收者，且当前聊天对象是发送者
+            if (username.equals(messageReceiver) && currentPeer.equals(messageSender)) {
                 shouldDisplay = true;
                 System.out.println("显示消息 - 当前聊天对象发送给当前用户的消息");
             }

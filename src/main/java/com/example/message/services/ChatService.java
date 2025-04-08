@@ -923,17 +923,20 @@ public class ChatService {
             int savedId = saveMessageAndGetId(currentUser, receiver, content, String.valueOf(tempId));
             logger.info("保存消息到数据库，获取到ID: " + savedId);
             
-            // 立即回显消息到聊天界面
+            // 立即回显消息到聊天界面，确保在消息发送后立即在UI上显示
             final int finalMsgId = savedId > 0 ? savedId : tempId;
             final String finalContent = content;
             if (messageReceivedCallback != null) {
                 final ChatMessage chatMessage = new ChatMessage(
                     finalMsgId, currentUser, receiver, finalContent, timestampStr, false);
                 
+                // 使用Platform.runLater确保在UI线程上更新，且最高优先级处理
                 Platform.runLater(() -> {
-                    logger.info("回显消息到UI: ID=" + chatMessage.getId() + ", 内容=" + chatMessage.getContent());
+                    logger.info("立即回显消息到UI: ID=" + chatMessage.getId() + ", 内容=" + chatMessage.getContent());
                     messageReceivedCallback.accept(chatMessage);
                 });
+            } else {
+                logger.warning("消息接收回调未设置，无法回显消息");
             }
             
             // 发送到服务器
