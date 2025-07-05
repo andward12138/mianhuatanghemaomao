@@ -11,11 +11,17 @@ import java.util.logging.Level;
 public class DBUtil {
     private static final Logger logger = Logger.getLogger(DBUtil.class.getName());
     
+    // 连接池实例
+    private static DBConnectionPool connectionPool;
+    
+    // 为支持多实例运行，使用实例ID区分数据库文件
+    private static final String INSTANCE_ID = String.valueOf(System.currentTimeMillis() % 10000);
+    
     // 数据库路径配置（优先级从高到低）
-    private static final String APP_DIR_DB_PATH = "./data/app.db"; // 应用运行目录下data子目录（jar包同级目录）
-    private static final String CURRENT_DIR_DB_PATH = "./app.db"; // 应用当前目录（备选）
-    private static final String USER_HOME_DB_PATH = System.getProperty("user.home") + "/心情通讯/data.db"; // 用户主目录
-    private static final String TEMP_DIR_DB_PATH = System.getProperty("java.io.tmpdir") + "/心情通讯/data.db"; // 临时目录
+    private static final String APP_DIR_DB_PATH = "./data/app_" + INSTANCE_ID + ".db"; // 应用运行目录下data子目录（jar包同级目录）
+    private static final String CURRENT_DIR_DB_PATH = "./app_" + INSTANCE_ID + ".db"; // 应用当前目录（备选）
+    private static final String USER_HOME_DB_PATH = System.getProperty("user.home") + "/心情通讯/data_" + INSTANCE_ID + ".db"; // 用户主目录
+    private static final String TEMP_DIR_DB_PATH = System.getProperty("java.io.tmpdir") + "/心情通讯/data_" + INSTANCE_ID + ".db"; // 临时目录
     private static final String MEMORY_DB_PATH = ":memory:"; // 内存数据库（最后选项）
     
     private static String dbPath = null; // 实际使用的路径
@@ -114,8 +120,76 @@ public class DBUtil {
         dbPath = MEMORY_DB_PATH;
     }
 
-    // 获取数据库连接
+    // 获取数据库连接（使用连接池）
     public static Connection getConnection() throws SQLException {
+        if (dbPath == null) {
+            initializeDatabasePath();
+        }
+        
+        // 初始化连接池
+        if (connectionPool == null) {
+            synchronized (DBUtil.class) {
+                if (connectionPool == null) {
+                    initializeConnectionPool();
+                }
+            }
+        }
+        
+        try {
+            return connectionPool.getConnection();
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "从连接池获取连接失败: " + e.getMessage() + "，路径: " + dbPath, e);
+            throw e;
+        }
+    }
+    
+    // 返回连接到连接池
+    public static void returnConnection(Connection connection) {
+        if (connectionPool != null && connection != null) {
+            connectionPool.returnConnection(connection);
+        }
+    }
+    
+    // 初始化连接池
+    private static void initializeConnectionPool() {
+        try {
+            // 连接前确保数据库目录存在
+            if (!MEMORY_DB_PATH.equals(dbPath)) {
+                File dbFile = new File(dbPath);
+                File parentDir = dbFile.getParentFile();
+                if (parentDir != null && !parentDir.exists()) {
+                    parentDir.mkdirs();
+                    logger.info("已创建数据库目录: " + parentDir.getAbsolutePath());
+                }
+            }
+            
+            String jdbcUrl = "jdbc:sqlite:" + dbPath;
+            logger.info("初始化连接池: " + jdbcUrl);
+            connectionPool = DBConnectionPool.getInstance(jdbcUrl);
+            
+            // 定期打印连接池状态
+            Thread statusThread = new Thread(() -> {
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        Thread.sleep(300000); // 5分钟
+                        logger.info(connectionPool.getPoolStatus());
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            });
+            statusThread.setDaemon(true);
+            statusThread.setName("DB-Pool-Status-Monitor");
+            statusThread.start();
+            
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "初始化连接池失败: " + e.getMessage(), e);
+        }
+    }
+    
+    // 获取原始数据库连接（不使用连接池）
+    public static Connection getDirectConnection() throws SQLException {
         if (dbPath == null) {
             initializeDatabasePath();
         }
@@ -142,7 +216,10 @@ public class DBUtil {
     // 初始化数据库表
     public static void initializeDatabase() {
         logger.info("初始化数据库表结构...");
-        try (Connection connection = getConnection()) {
+        Connection connection = null;
+        try {
+            connection = getConnection();
+            
             // 创建日记表
             String createDiaryTableSQL = "CREATE TABLE IF NOT EXISTS diary_entries ("
                     + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -165,6 +242,8 @@ public class DBUtil {
             logger.info("数据库表初始化完成，路径: " + dbPath);
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "初始化数据库表时出错: " + e.getMessage(), e);
+        } finally {
+            returnConnection(connection);
         }
     }
     
@@ -178,13 +257,40 @@ public class DBUtil {
     
     // 验证数据库连接并返回状态信息
     public static boolean testConnection() {
-        try (Connection connection = getConnection()) {
+        Connection connection = null;
+        try {
+            connection = getConnection();
             boolean isValid = connection != null && connection.isValid(2);
             logger.info("数据库连接测试 - " + (isValid ? "成功" : "失败") + ", 路径: " + dbPath);
             return isValid;
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "数据库连接测试失败: " + e.getMessage(), e);
             return false;
+        } finally {
+            returnConnection(connection);
         }
+    }
+    
+    // 获取连接池状态信息
+    public static String getConnectionPoolStatus() {
+        if (connectionPool != null) {
+            return connectionPool.getPoolStatus();
+        }
+        return "连接池未初始化";
+    }
+    
+    // 关闭连接池
+    public static void shutdown() {
+        if (connectionPool != null) {
+            logger.info("正在关闭数据库连接池...");
+            connectionPool.shutdown();
+            connectionPool = null;
+            logger.info("数据库连接池已关闭");
+        }
+    }
+    
+    // 关闭所有连接（别名方法）
+    public static void closeAllConnections() {
+        shutdown();
     }
 }

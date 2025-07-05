@@ -2,6 +2,7 @@ package com.example.message.services;
 
 import com.example.message.model.ChatMessage;
 import com.example.message.util.DBUtil;
+import com.example.message.util.MessageCache;
 
 import java.io.*;
 import java.net.*;
@@ -22,7 +23,7 @@ import java.util.logging.Level;
 import javafx.application.Platform;
 
 public class ChatService {
-    private static final int PORT = 9999;
+    private static int PORT = 9999; // 改为可变端口
     private static ServerSocket serverSocket;
     private static ExecutorService executorService;
     private static boolean isServerRunning = false;
@@ -47,6 +48,9 @@ public class ChatService {
     private static final List<String> onlineUsers = new ArrayList<>();
 
     private static final Logger logger = Logger.getLogger(ChatService.class.getName());
+    
+    // 消息缓存实例
+    private static final MessageCache messageCache = MessageCache.getInstance();
 
     // 设置是否使用服务器模式
     public static void setUseServerMode(boolean useServerMode) {
@@ -85,6 +89,8 @@ public class ChatService {
         executorService = Executors.newCachedThreadPool();
         
         try {
+            // 动态分配可用端口，避免多实例冲突
+            PORT = findAvailablePort(PORT);
             serverSocket = new ServerSocket(PORT);
             isServerRunning = true;
             
@@ -103,6 +109,7 @@ public class ChatService {
             });
             
             System.out.println("聊天服务器已启动，监听端口: " + PORT);
+            System.out.println("提示：其他实例可通过IP地址和端口 " + PORT + " 连接到此服务器");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -154,14 +161,44 @@ public class ChatService {
             
             logger.info("输入输出流创建成功");
             
-            // 发送登录消息
-            String loginMessage = "LOGIN:" + username;
-            logger.info("发送登录消息: " + loginMessage);
-            serverWriter.println(loginMessage);
+            // 发送登录消息，如果用户名冲突则自动生成新用户名
+            String attemptUsername = username;
+            String response = null;
+            int attemptCount = 0;
+            final int maxAttempts = 5;
             
-            // 读取服务器响应
-            String response = serverReader.readLine();
-            logger.info("服务器响应: " + response);
+            while (attemptCount < maxAttempts) {
+                String loginMessage = "LOGIN:" + attemptUsername;
+                logger.info("发送登录消息: " + loginMessage + " (尝试 " + (attemptCount + 1) + "/" + maxAttempts + ")");
+                serverWriter.println(loginMessage);
+                
+                // 读取服务器响应
+                response = serverReader.readLine();
+                logger.info("服务器响应: " + response);
+                
+                if (response != null && response.startsWith("LOGIN_SUCCESS")) {
+                    // 登录成功，更新当前用户名
+                    currentUser = attemptUsername;
+                    ApiService.setCurrentUser(attemptUsername);
+                    logger.info("登录成功，用户名: " + attemptUsername);
+                    break;
+                } else if (response != null && response.contains("用户名已存在")) {
+                    // 用户名冲突，生成新的用户名
+                    attemptCount++;
+                    if (attemptCount < maxAttempts) {
+                        attemptUsername = username + "_" + System.currentTimeMillis() % 10000;
+                        logger.info("用户名冲突，尝试新用户名: " + attemptUsername);
+                        continue;
+                    } else {
+                        logger.warning("多次尝试后仍无法找到可用用户名");
+                        break;
+                    }
+                } else {
+                    // 其他错误
+                    logger.warning("登录失败: " + (response != null ? response : "无响应"));
+                    break;
+                }
+            }
             
             if (response != null && response.startsWith("LOGIN_SUCCESS")) {
                 isConnectedToServer = true;
@@ -693,11 +730,21 @@ public class ChatService {
     public static List<ChatMessage> getChatHistory(String otherUser) {
         logger.info("获取与用户 " + otherUser + " 的完整聊天历史");
         
+        // 首先尝试从缓存获取
+        List<ChatMessage> cachedMessages = messageCache.getUserMessages(currentUser, otherUser);
+        if (cachedMessages != null && !cachedMessages.isEmpty()) {
+            logger.info("从缓存获取到 " + cachedMessages.size() + " 条聊天历史");
+            return cachedMessages;
+        }
+        
+        // 缓存未命中，从数据源获取
+        List<ChatMessage> messages = null;
+        
         // 如果使用服务器模式，则通过ApiService获取聊天历史
         if (isUsingServerMode) {
             try {
                 // 尝试通过API获取聊天历史
-                List<ChatMessage> messages = ApiService.getChatHistory(currentUser, otherUser);
+                messages = ApiService.getChatHistory(currentUser, otherUser);
                 
                 if (messages != null && !messages.isEmpty()) {
                     logger.info("成功从API获取 " + messages.size() + " 条聊天历史");
@@ -709,19 +756,28 @@ public class ChatService {
                         }
                     }
                     
+                    // 缓存消息
+                    messageCache.cacheUserMessages(currentUser, otherUser, messages);
                     return messages;
                 } else {
                     logger.warning("通过API获取聊天历史失败或为空，尝试从本地数据库获取");
-                    return getChatHistoryFromLocalDB(otherUser);
+                    messages = getChatHistoryFromLocalDB(otherUser);
                 }
             } catch (Exception e) {
                 logger.log(Level.WARNING, "通过API获取聊天历史时出错: " + e.getMessage(), e);
-                return getChatHistoryFromLocalDB(otherUser);
+                messages = getChatHistoryFromLocalDB(otherUser);
             }
         } else {
             // 使用本地数据库
-            return getChatHistoryFromLocalDB(otherUser);
+            messages = getChatHistoryFromLocalDB(otherUser);
         }
+        
+        // 缓存从数据库获取的消息
+        if (messages != null && !messages.isEmpty()) {
+            messageCache.cacheUserMessages(currentUser, otherUser, messages);
+        }
+        
+        return messages;
     }
     
     // 从本地数据库获取聊天历史（作为备份方法）
@@ -729,8 +785,10 @@ public class ChatService {
         List<ChatMessage> messages = new ArrayList<>();
         String selectSQL = "SELECT * FROM chat_messages WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?) ORDER BY timestamp ASC";
         
-        try (Connection connection = DBUtil.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(selectSQL)) {
+        Connection connection = null;
+        try {
+            connection = DBUtil.getConnection();
+            PreparedStatement preparedStatement = connection.prepareStatement(selectSQL);
             
             logger.info("从本地数据库获取与用户 " + otherUser + " 的聊天历史");
             preparedStatement.setString(1, currentUser);
@@ -754,6 +812,8 @@ public class ChatService {
             logger.info("已从本地数据库加载与 " + otherUser + " 的聊天历史: " + messages.size() + " 条消息");
         } catch (SQLException e) {
             logger.log(Level.WARNING, "从本地数据库获取聊天历史时出错: " + e.getMessage(), e);
+        } finally {
+            DBUtil.returnConnection(connection);
         }
         
         return messages;
@@ -761,6 +821,9 @@ public class ChatService {
     
     // 标记消息为已读
     public static void markAsRead(int messageId) {
+        // 先更新缓存中的消息状态
+        messageCache.updateMessageStatus(messageId, true);
+        
         // 如果使用服务器模式，则通过ApiService标记消息为已读
         if (isUsingServerMode) {
             // 尝试通过API标记消息为已读
@@ -779,8 +842,10 @@ public class ChatService {
     private static void markAsReadInLocalDB(int messageId) {
         String updateSQL = "UPDATE chat_messages SET is_read = 1 WHERE id = ?";
         
-        try (Connection connection = DBUtil.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(updateSQL)) {
+        Connection connection = null;
+        try {
+            connection = DBUtil.getConnection();
+            PreparedStatement preparedStatement = connection.prepareStatement(updateSQL);
             
             preparedStatement.setInt(1, messageId);
             preparedStatement.executeUpdate();
@@ -788,6 +853,8 @@ public class ChatService {
         } catch (SQLException e) {
             System.out.println("在本地数据库中标记消息为已读时出错: " + e.getMessage());
             e.printStackTrace();
+        } finally {
+            DBUtil.returnConnection(connection);
         }
     }
     
@@ -880,14 +947,21 @@ public class ChatService {
             // 当前API不支持清空所有消息，返回失败
             return false;
         } else {
+            // 清空缓存
+            messageCache.clearAllCache();
+            
             // 清空本地数据库中的聊天记录
-            try (Connection conn = DBUtil.getConnection();
-                 Statement stmt = conn.createStatement()) {
+            Connection conn = null;
+            try {
+                conn = DBUtil.getConnection();
+                Statement stmt = conn.createStatement();
                 int rows = stmt.executeUpdate("DELETE FROM chat_messages");
                 return rows >= 0; // 即使没有记录被删除，也视为成功
             } catch (SQLException e) {
                 e.printStackTrace();
                 return false;
+            } finally {
+                DBUtil.returnConnection(conn);
             }
         }
     }
@@ -1063,11 +1137,14 @@ public class ChatService {
     
     // 保存消息到本地数据库并返回生成的ID
     private static int saveMessageToLocalDBAndGetId(String sender, String receiver, String content) {
-        String timestamp = LocalDateTime.now().toString();
+        LocalDateTime now = LocalDateTime.now();
+        String timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         String insertSQL = "INSERT INTO chat_messages (sender, receiver, content, timestamp, is_read) VALUES (?, ?, ?, ?, ?)";
         
-        try (Connection connection = DBUtil.getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(insertSQL, Statement.RETURN_GENERATED_KEYS)) {
+        Connection connection = null;
+        try {
+            connection = DBUtil.getConnection();
+            PreparedStatement preparedStatement = connection.prepareStatement(insertSQL, Statement.RETURN_GENERATED_KEYS);
             
             preparedStatement.setString(1, sender);
             preparedStatement.setString(2, receiver);
@@ -1081,6 +1158,10 @@ public class ChatService {
                     if (generatedKeys.next()) {
                         int id = generatedKeys.getInt(1);
                         logger.info("消息已保存到本地数据库并获取ID: " + id);
+                        
+                        // 创建ChatMessage对象并添加到缓存
+                        ChatMessage message = new ChatMessage(id, sender, receiver, content, now, false);
+                        messageCache.addMessage(message);
                         
                         // 验证ID是否已经存在于数据库中，以确保唯一性
                         try (PreparedStatement checkStmt = connection.prepareStatement(
@@ -1119,6 +1200,11 @@ public class ChatService {
                 if (rs.next()) {
                     int id = rs.getInt(1);
                     logger.info("使用last_insert_rowid()获取到ID: " + id);
+                    
+                    // 创建ChatMessage对象并添加到缓存
+                    ChatMessage message = new ChatMessage(id, sender, receiver, content, now, false);
+                    messageCache.addMessage(message);
+                    
                     return id;
                 }
             } catch (SQLException e) {
@@ -1128,13 +1214,25 @@ public class ChatService {
             // 生成一个随机的大ID，避免与已有ID冲突
             int randomId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
             logger.info("无法获取数据库生成的ID，使用替代ID: " + randomId);
+            
+            // 创建ChatMessage对象并添加到缓存
+            ChatMessage message = new ChatMessage(randomId, sender, receiver, content, now, false);
+            messageCache.addMessage(message);
+            
             return randomId;
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "保存消息到本地数据库时出错", e);
             // 生成一个临时ID，以便UI可以显示消息
             int tempId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
             logger.info("由于数据库错误，使用临时ID: " + tempId);
+            
+            // 创建ChatMessage对象并添加到缓存
+            ChatMessage message = new ChatMessage(tempId, sender, receiver, content, now, false);
+            messageCache.addMessage(message);
+            
             return tempId;
+        } finally {
+            DBUtil.returnConnection(connection);
         }
     }
 
@@ -1145,7 +1243,14 @@ public class ChatService {
 
     // 获取与特定用户的聊天历史，只返回特定时间后的消息
     public static List<ChatMessage> getNewChatHistory(String otherUser, LocalDateTime since) {
-        // 先获取全部聊天历史
+        // 首先尝试从缓存获取最近的消息
+        List<ChatMessage> recentMessages = messageCache.getRecentMessages(currentUser, otherUser, since);
+        if (recentMessages != null) {
+            logger.info("从缓存获取到 " + recentMessages.size() + " 条最近消息");
+            return recentMessages;
+        }
+        
+        // 缓存未命中，先获取全部聊天历史
         List<ChatMessage> allMessages = getChatHistory(otherUser);
         
         // 筛选出指定时间之后的消息
@@ -1220,5 +1325,86 @@ public class ChatService {
 
     public static void setNewMessageNotificationCallback(Consumer<String> callback) {
         newMessageNotificationCallback = callback;
+    }
+    
+    // 获取当前用户名
+    public static String getCurrentUser() {
+        return currentUser;
+    }
+    
+    // 查找可用端口
+    private static int findAvailablePort(int startPort) {
+        for (int port = startPort; port <= startPort + 100; port++) {
+            try (ServerSocket testSocket = new ServerSocket(port)) {
+                return port;
+            } catch (IOException e) {
+                // 端口被占用，继续尝试下一个
+            }
+        }
+        // 如果都被占用，返回随机端口
+        try (ServerSocket testSocket = new ServerSocket(0)) {
+            return testSocket.getLocalPort();
+        } catch (IOException e) {
+            throw new RuntimeException("无法找到可用端口", e);
+        }
+    }
+    
+    // 获取当前使用的端口
+    public static int getCurrentPort() {
+        return PORT;
+    }
+    
+    // 断开连接
+    public static void disconnect() {
+        try {
+            if (isConnectedToServer && serverConnection != null) {
+                serverWriter.println("LOGOUT:" + currentUser);
+                serverConnection.close();
+                isConnectedToServer = false;
+                logger.info("已断开服务器连接");
+            }
+            
+            if (isServerRunning) {
+                stopServer();
+            }
+            
+            if (clientSocket != null && !clientSocket.isClosed()) {
+                clientSocket.close();
+            }
+            
+            if (executorService != null) {
+                executorService.shutdown();
+            }
+            
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "断开连接时出错", e);
+        }
+    }
+    
+    // 直接连接到指定IP
+    public static boolean connectDirect(String username, String peerIp) {
+        try {
+            currentUser = username;
+            return connectToPeer(peerIp, username);
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "直接连接失败", e);
+            return false;
+        }
+    }
+    
+    // 设置消息回调
+    public static void setMessageCallback(Consumer<ChatMessage> callback) {
+        messageReceivedCallback = callback;
+    }
+    
+    // 发送私聊消息 - 返回boolean版本
+    public static boolean sendPrivateMessageWithResult(String receiver, String content) {
+        try {
+            sendPrivateMessage(receiver, content);
+            return true;
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "发送消息失败", e);
+            return false;
+        }
     }
 }

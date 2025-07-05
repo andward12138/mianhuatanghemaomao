@@ -113,6 +113,37 @@ public class DiaryService {
         }
     }
     
+    // 创建日记 - 为DiaryController使用
+    public static boolean createDiary(String title, String content, String mood, String tags) {
+        try {
+            // 合并标题和内容
+            String fullContent = title + "\n\n" + content;
+            // 合并心情和标签
+            String fullTags = mood + (tags != null && !tags.trim().isEmpty() ? "," + tags : "");
+            
+            int diaryId = addDiary(fullContent, fullTags);
+            return diaryId > 0;
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error creating diary", e);
+            return false;
+        }
+    }
+    
+    // 更新日记 - 为DiaryController使用
+    public static boolean updateDiary(int id, String title, String content, String mood, String tags) {
+        try {
+            // 合并标题和内容
+            String fullContent = title + "\n\n" + content;
+            // 合并心情和标签
+            String fullTags = mood + (tags != null && !tags.trim().isEmpty() ? "," + tags : "");
+            
+            return updateDiary(id, fullContent, fullTags);
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error updating diary", e);
+            return false;
+        }
+    }
+    
     // 更新日记内容 - 统一的更新方法
     public static boolean updateDiary(int id, String content, String mood) {
         try (Connection conn = DBUtil.getConnection();
@@ -298,7 +329,14 @@ public class DiaryService {
         return diaries;
     }
     
-    // 根据关键词和日期过滤日记
+    // 根据关键词和日期过滤日记 (支持LocalDate参数)
+    public static List<Diary> searchDiaries(String keyword, java.time.LocalDate startDate, java.time.LocalDate endDate) {
+        String startDateStr = startDate != null ? startDate.toString() : null;
+        String endDateStr = endDate != null ? endDate.toString() : null;
+        return searchDiaries(keyword, startDateStr, endDateStr);
+    }
+    
+    // 根据关键词和日期过滤日记 (原始方法)
     public static List<Diary> searchDiaries(String keyword, String startDate, String endDate) {
         if (useCloudStorage) {
             // 尝试通过API搜索日记
