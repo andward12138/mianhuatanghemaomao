@@ -6,7 +6,6 @@ import com.example.message.util.DBUtil;
 import java.io.*;
 import java.net.*;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -122,7 +121,6 @@ public class ChatService {
         }
         
         // 设置连接状态为尝试连接中
-        boolean connectionSuccessful = false;
         Socket socket = null;
         
         try {
@@ -165,7 +163,6 @@ public class ChatService {
             
             if (response != null && response.startsWith("LOGIN_SUCCESS")) {
                 isConnectedToServer = true;
-                connectionSuccessful = true;
                 
                 // 启动线程接收服务器消息
                 executorService.submit(() -> {
@@ -181,6 +178,15 @@ public class ChatService {
                         tryReconnect();
                     }
                 });
+                
+                // 启动消息排序服务（如果需要）
+                // MessageOrderingService.start(message -> {
+                //     if (messageReceivedCallback != null) {
+                //         Platform.runLater(() -> {
+                //             messageReceivedCallback.accept(message);
+                //         });
+                //     }
+                // });
                 
                 // 启动心跳检测线程
                 executorService.submit(() -> {
@@ -286,23 +292,23 @@ public class ChatService {
                     }
                 });
             } else {
-                logger.info("用户列表更新回调未设置");
+                logger.warning("用户列表更新回调未设置，无法更新UI用户列表");
             }
         } else if (message.startsWith("MSG:")) {
-            // 处理收到的消息，格式: MSG:发送者:接收者:内容
-            // 或直接是 MSG:发送者:内容 (如果是广播消息)
-            String[] parts = message.substring("MSG:".length()).split(":", 3);
+            // 处理收到的消息，格式: MSG:发送者:接收者:内容:时间戳
+            String[] parts = message.substring("MSG:".length()).split(":", 5);
             String sender, receiver, content;
             
-            if (parts.length >= 3) {
-                // 私人消息: MSG:发送者:接收者:内容
+            if (parts.length >= 4) {
+                // 私人消息: MSG:发送者:接收者:内容:时间戳
                 sender = parts[0];
                 receiver = parts[1];
                 content = parts[2];
+                // timestamp = parts.length > 3 ? parts[3] : LocalDateTime.now().toString();
                 logger.info("收到私人消息 - 发送者: " + sender + 
                            ", 接收者: " + receiver + ", 内容: " + content);
-            } else if (parts.length == 2) {
-                // 广播消息: MSG:发送者:内容
+            } else if (parts.length >= 2) {
+                // 广播消息或其他格式: MSG:发送者:内容
                 sender = parts[0];
                 receiver = "all";
                 content = parts[1];
@@ -312,12 +318,13 @@ public class ChatService {
                 return;
             }
             
-            // 如果这条消息是当前用户发送的，检查是否需要处理
+            // 如果这条消息是当前用户发送的，跳过处理（避免重复保存和显示）
             if (sender.equals(currentUser)) {
-                logger.info("收到自己发送的消息回显，检查是否需要处理");
+                logger.info("收到自己发送的消息回显，跳过处理避免重复保存");
+                return; // 不保存也不显示
             }
             
-            // 保存消息到本地数据库
+            // 保存消息到本地数据库（只处理接收到的他人消息）
             logger.info("保存消息到数据库 - 发送者: " + sender + ", 接收者: " + receiver + ", 内容: " + content);
             int msgId = saveMessageAndGetId(sender, receiver, content, null);
             
@@ -327,37 +334,20 @@ public class ChatService {
                 final ChatMessage chatMessage = new ChatMessage(
                     msgId, sender, receiver, content, LocalDateTime.now().toString(), false);
                 
-                // 判断是否应该显示此消息
-                boolean shouldDisplay = false;
+                logger.info("收到消息，通过回调传递给UI: " + sender + " -> " + receiver + ": " + content);
                 
-                // 检查消息是否应该在当前聊天窗口显示
-                if (currentChatPeer != null) {
-                    // 当前用户是接收者，且发送者是当前聊天对象
-                    if (receiver.equals(currentUser) && sender.equals(currentChatPeer)) {
-                        shouldDisplay = true;
-                        logger.info("要显示的消息: 当前用户是接收者，发送者是当前聊天对象");
-                    }
-                    // 当前用户是发送者，且接收者是当前聊天对象
-                    else if (sender.equals(currentUser) && receiver.equals(currentChatPeer)) {
-                        shouldDisplay = true;
-                        logger.info("要显示的消息: 当前用户是发送者，接收者是当前聊天对象");
-                    }
-                }
+                // 将消息传递给UI层
+                Platform.runLater(() -> {
+                    messageReceivedCallback.accept(chatMessage);
+                });
                 
-                if (shouldDisplay) {
-                    logger.info("消息将显示在当前聊天窗口");
-                    Platform.runLater(() -> {
-                        messageReceivedCallback.accept(chatMessage);
-                    });
-                } else {
-                    // 如果当前用户是接收者，但不是当前聊天窗口，触发通知
-                    if (receiver.equals(currentUser) && !sender.equals(currentChatPeer)) {
-                        logger.info("触发来自 " + sender + " 的新消息通知");
-                        if (newMessageNotificationCallback != null) {
-                            Platform.runLater(() -> {
-                                newMessageNotificationCallback.accept(sender);
-                            });
-                        }
+                // 如果当前用户是接收者，但不是当前聊天窗口，额外触发通知
+                if (receiver.equals(currentUser) && currentChatPeer != null && !sender.equals(currentChatPeer)) {
+                    logger.info("触发来自 " + sender + " 的新消息通知");
+                    if (newMessageNotificationCallback != null) {
+                        Platform.runLater(() -> {
+                            newMessageNotificationCallback.accept(sender);
+                        });
                     }
                 }
             } else {
@@ -372,6 +362,9 @@ public class ChatService {
             } catch (Exception e) {
                 logger.log(Level.WARNING, "发送PONG响应时出错", e);
             }
+        } else if (message.equals("HEARTBEAT_ACK")) {
+            // 心跳确认消息，正常处理
+            logger.fine("收到心跳确认");
         } else {
             logger.warning("未知消息类型: " + message);
         }
@@ -543,8 +536,8 @@ public class ChatService {
             }
             
             try {
-                // 保存消息到本地数据库
-                saveMessage(currentUser, currentChatPeer, content);
+                // 不在此处保存消息到数据库，避免重复保存
+                // 消息会在服务器回传时统一保存到数据库
                 
                 // 通过服务器发送消息
                 String message = "MSG:" + content;
@@ -571,7 +564,7 @@ public class ChatService {
             }
             
             try {
-                // 保存消息到本地数据库
+                // 立即保存消息到本地数据库（直接连接模式需要立即保存）
                 saveMessage(currentUser, connectedPeer, content);
                 
                 // 发送消息到对方
@@ -673,14 +666,21 @@ public class ChatService {
             if (messages != null && !messages.isEmpty()) {
                 logger.info("成功从API获取 " + messages.size() + " 条聊天历史");
                 
-                // 确保所有消息都有正确的ID，避免重复显示问题
+                // 过滤和验证消息
+                List<ChatMessage> validMessages = new ArrayList<>();
                 for (ChatMessage msg : messages) {
+                    if (msg.getSender() == null || msg.getReceiver() == null || msg.getContent() == null) {
+                        logger.warning("API返回的消息缺少必需字段，跳过: " + msg);
+                        continue;
+                    }
                     if (msg.getId() <= 0) {
                         logger.warning("API返回的消息没有有效ID: " + msg.getContent());
                     }
+                    validMessages.add(msg);
                 }
                 
-                return messages;
+                logger.info("过滤后有效消息数量: " + validMessages.size());
+                return validMessages;
             } else {
                 logger.warning("通过API获取聊天历史失败或为空，返回空列表");
                 return new ArrayList<>();
@@ -891,7 +891,7 @@ public class ChatService {
     private static Consumer<List<String>> userListUpdateCallback;
 
     /**
-     * 发送私人消息给指定用户
+     * 发送私人消息给指定用户（增强版本）
      * @param receiver 接收者用户名
      * @param content 消息内容
      */
@@ -908,29 +908,21 @@ public class ChatService {
         }
         
         try {
-            // 生成时间戳
-            LocalDateTime currentTime = LocalDateTime.now();
-            String timestampStr = currentTime.toString();
+            // 生成时间戳和临时ID用于立即显示
+            LocalDateTime localTimestamp = LocalDateTime.now();
+            final int tempId = (int)(System.currentTimeMillis() % 100000);
             
-            // 生成临时消息ID
-            final long tempTime = System.currentTimeMillis();
-            final int tempRandom = (int)(Math.random() * 10000);
-            final int tempId = (int)(tempTime % 100000) + tempRandom; // 生成一个唯一性较高的临时ID
+            logger.info("发送私人消息: " + currentUser + " -> " + receiver + ": " + content);
             
-            logger.info("生成临时消息ID: " + tempId + " 用于发送给 " + receiver + " 的消息");
+            // 立即保存消息到数据库（发送方保存自己的消息）
+            int realMessageId = saveMessageAndGetId(currentUser, receiver, content, null);
+            logger.info("消息已保存到数据库，ID: " + realMessageId);
             
-            // 先保存消息到数据库，获取真实ID
-            int savedId = saveMessageAndGetId(currentUser, receiver, content, String.valueOf(tempId));
-            logger.info("保存消息到数据库，获取到ID: " + savedId);
-            
-            // 立即回显消息到聊天界面，确保在消息发送后立即在UI上显示
-            final int finalMsgId = savedId > 0 ? savedId : tempId;
-            final String finalContent = content;
+            // 立即回显消息到聊天界面（使用真实ID）
             if (messageReceivedCallback != null) {
                 final ChatMessage chatMessage = new ChatMessage(
-                    finalMsgId, currentUser, receiver, finalContent, timestampStr, false);
+                    realMessageId > 0 ? realMessageId : tempId, currentUser, receiver, content, localTimestamp, false);
                 
-                // 使用Platform.runLater确保在UI线程上更新，且最高优先级处理
                 Platform.runLater(() -> {
                     logger.info("立即回显消息到UI: ID=" + chatMessage.getId() + ", 内容=" + chatMessage.getContent());
                     messageReceivedCallback.accept(chatMessage);
@@ -939,18 +931,14 @@ public class ChatService {
                 logger.warning("消息接收回调未设置，无法回显消息");
             }
             
-            // 发送到服务器
+            // 发送到服务器（使用简化格式）
             String messageToSend = "PRIVATE:" + receiver + ":" + content;
-            logger.info("发送私人消息到服务器: " + messageToSend + " (ID=" + finalMsgId + ")");
+            logger.info("发送私人消息到服务器: " + messageToSend);
             serverWriter.println(messageToSend);
             serverWriter.flush();
             
-            // 请求刷新在线用户列表
-            if (Math.random() < 0.1) { // 降低请求频率
-                serverWriter.println("GET_USERS");
-                serverWriter.flush();
-                logger.fine("已请求更新在线用户列表");
-            }
+            // 消息已在发送时保存，服务器回显时将跳过保存
+            
         } catch (Exception e) {
             logger.log(Level.SEVERE, "发送私人消息时出错", e);
         }

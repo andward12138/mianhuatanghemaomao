@@ -24,7 +24,7 @@ import java.util.logging.Logger;
 public class ApiService {
     private static final Logger logger = Logger.getLogger(ApiService.class.getName());
     private static final String API_BASE_URL = "http://8.134.99.69:3000/api";
-    private static final int CONNECT_TIMEOUT = 10000; // 10秒
+    private static final int CONNECT_TIMEOUT = 5000; // 5秒（减少超时时间）
     private static final int READ_TIMEOUT = 30000; // 30秒
     private static final int MAX_RETRIES = 3; // 最大重试次数
     private static boolean isApiAvailable = false; // API是否可用
@@ -231,7 +231,7 @@ public class ApiService {
         int retries = 0;
         while (retries < MAX_RETRIES) {
             try {
-                String timestamp = LocalDateTime.now().toString();
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                 
                 // 构建JSON字符串
                 String jsonBody = String.format(
@@ -340,7 +340,15 @@ public class ApiService {
                 
                 // 简单解析JSON数组
                 if (jsonStr.startsWith("[") && jsonStr.endsWith("]")) {
-                    String[] items = jsonStr.substring(1, jsonStr.length() - 1).split("\\},\\{");
+                    String content = jsonStr.substring(1, jsonStr.length() - 1).trim();
+                    
+                    // 检查是否为空数组
+                    if (content.isEmpty()) {
+                        logger.info("服务器返回空的聊天记录");
+                        return messages; // 返回空列表
+                    }
+                    
+                    String[] items = content.split("\\},\\{");
                     logger.info("解析到 " + items.length + " 条聊天记录");
                     
                     for (int i = 0; i < items.length; i++) {
@@ -353,11 +361,16 @@ public class ApiService {
                         int id = extractIntField(item, "id");
                         String sender = extractStringField(item, "sender");
                         String receiver = extractStringField(item, "receiver");
-                        String content = extractStringField(item, "content");
+                        String content_field = extractStringField(item, "content");
                         String timestamp = extractStringField(item, "timestamp");
                         boolean isRead = extractIntField(item, "is_read") == 1;
                         
-                        messages.add(new ChatMessage(id, sender, receiver, content, timestamp, isRead));
+                        // 验证必需字段
+                        if (sender != null && receiver != null && content_field != null) {
+                            messages.add(new ChatMessage(id, sender, receiver, content_field, timestamp, isRead));
+                        } else {
+                            logger.warning("跳过无效的消息记录: sender=" + sender + ", receiver=" + receiver + ", content=" + content_field);
+                        }
                     }
                 } else {
                     logger.warning("从服务器接收到的响应不是有效的JSON数组: " + jsonStr);
@@ -916,8 +929,8 @@ public class ApiService {
             conn.setReadTimeout(READ_TIMEOUT);
             conn.setDoOutput(true);
             
-            // 准备时间戳
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
+            // 准备时间戳（使用ISO格式，确保与服务端兼容）
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
             
             // 创建JSON格式的请求体
             String jsonInputString = String.format(
@@ -970,6 +983,8 @@ public class ApiService {
                 return 1;
             } else {
                 logger.severe("保存消息失败: 状态码=" + responseCode + ", 响应: " + responseContent);
+                logger.severe("请求内容: " + jsonInputString);
+                logger.severe("请求URL: " + url.toString());
                 return -1;
             }
         } catch (Exception e) {

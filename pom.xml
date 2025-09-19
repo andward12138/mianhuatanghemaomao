@@ -26,6 +26,34 @@
             <artifactId>vfx</artifactId>
             <version>1.4.0</version>
         </dependency>
+        
+        <!-- 添加ControlsFX - 扩展JavaFX控件库 -->
+        <dependency>
+            <groupId>org.controlsfx</groupId>
+            <artifactId>controlsfx</artifactId>
+            <version>11.2.1</version>
+        </dependency>
+        
+        <!-- 添加MaterialFX - Material Design风格组件 -->
+        <dependency>
+            <groupId>io.github.palexdev</groupId>
+            <artifactId>materialfx</artifactId>
+            <version>11.17.0</version>
+        </dependency>
+        
+        <!-- 添加AtlantaFX - 现代化主题库 -->
+        <dependency>
+            <groupId>io.github.mkpaz</groupId>
+            <artifactId>atlantafx-base</artifactId>
+            <version>2.0.1</version>
+        </dependency>
+        
+        <!-- 添加FontAwesome图标库 -->
+        <dependency>
+            <groupId>de.jensd</groupId>
+            <artifactId>fontawesomefx-fontawesome</artifactId>
+            <version>4.7.0-9.1.2</version>
+        </dependency>
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
@@ -93,7 +121,7 @@
                         <!-- Default configuration for running with: mvn clean javafx:run -->
                         <id>default-cli</id>
                         <configuration>
-                            <mainClass>com.example.message.Main</mainClass>
+                            <mainClass>com.example.message.MainApp</mainClass>
                             <launcher>app</launcher>
                             <jlinkZipName>app</jlinkZipName>
                             <jlinkImageName>app</jlinkImageName>
@@ -110,7 +138,7 @@
     <configuration>
         <archive>
             <manifest>
-                <mainClass>com.example.message.Main</mainClass>
+                <mainClass>com.example.message.MainApp</mainClass>
             </manifest>
         </archive>
         <descriptorRefs>

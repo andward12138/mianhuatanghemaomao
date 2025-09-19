@@ -1,0 +1,18 @@
+-- 创建日记表
+CREATE TABLE IF NOT EXISTS diaries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user TEXT NOT NULL,
+  date TEXT NOT NULL,
+  content TEXT NOT NULL,
+  timestamp TEXT NOT NULL,
+  tags TEXT
+);
+
+-- 创建日志表
+CREATE TABLE IF NOT EXISTS logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp TEXT NOT NULL,
+  level TEXT NOT NULL,
+  user TEXT NOT NULL,
+  message TEXT NOT NULL
+);

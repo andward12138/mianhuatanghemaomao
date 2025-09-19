@@ -1,0 +1,97 @@
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+
+const app = express();
+const port = 3000;
+
+// 中间件配置
+app.use(cors());
+app.use(bodyParser.json());
+
+// 数据库连接
+const db = new sqlite3.Database(path.join(__dirname, '../db/messages.db'));
+
+// 创建消息表
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender TEXT,
+    receiver TEXT,
+    content TEXT,
+    timestamp TEXT
+  )`);
+});
+
+// 获取所有消息
+app.get('/api/messages', (req, res) => {
+  db.all('SELECT * FROM chat_messages ORDER BY timestamp DESC', (err, rows) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: '获取消息失败' });
+    }
+    res.json(rows);
+  });
+});
+
+// 获取特定用户的消息
+app.get('/api/messages/:username', (req, res) => {
+  const username = req.params.username;
+  db.all(
+    'SELECT * FROM chat_messages WHERE sender = ? OR receiver = ? OR receiver = "all" ORDER BY timestamp DESC',
+    [username, username],
+    (err, rows) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: '获取消息失败' });
+      }
+      res.json(rows);
+    }
+  );
+});
+
+// 添加新消息
+app.post('/api/messages', (req, res) => {
+  const { sender, receiver, content, timestamp } = req.body;
+  
+  console.log('收到消息:', req.body);
+  
+  if (!sender || !content || !timestamp) {
+    return res.status(400).json({ error: '消息数据不完整' });
+  }
+
+  const receiverValue = receiver || 'all';
+
+  db.run(
+    'INSERT INTO chat_messages (sender, receiver, content, timestamp) VALUES (?, ?, ?, ?)',
+    [sender, receiverValue, content, timestamp],
+    function (err) {
+      if (err) {
+        console.error('数据库插入错误:', err);
+        return res.status(500).json({ error: '存储消息失败' });
+      }
+      
+      console.log('消息已存储，ID:', this.lastID);
+      res.json({ 
+        id: this.lastID,
+        sender,
+        receiver: receiverValue,
+        content,
+        timestamp
+      });
+    }
+  );
+});
+
+// 启动服务器
+app.listen(port, '0.0.0.0', () => {
+  console.log(`API服务器运行在 http://0.0.0.0:${port}`);
+});
+
+// 优雅关闭
+process.on('SIGINT', () => {
+  db.close();
+  process.exit(0);
+});

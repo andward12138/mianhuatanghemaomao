@@ -1,0 +1,1137 @@
+/* 高级感冷色调主题 - 参考 GitHub、VS Code、Notion 设计 */
+
+/* 根样式变量 - 现代冷色调配色 */
+.root {
+    /* 主色调 - 高级灰蓝色系 */
+    -fx-primary-dark: #1a1d23;
+    -fx-primary-gray: #2d3748;
+    -fx-primary-blue: #4a90e2;
+    -fx-accent-blue: #3182ce;
+    -fx-accent-teal: #38b2ac;
+    
+    /* 背景色 - 深色优雅 */
+    -fx-bg-primary: #0f1419;
+    -fx-bg-secondary: #1a1d23;
+    -fx-bg-tertiary: #2d3748;
+    -fx-bg-card: #ffffff;
+    -fx-bg-hover: #f7fafc;
+    -fx-bg-active: #edf2f7;
+    
+    /* 文字色 - 高对比度 */
+    -fx-text-primary: #1a202c;
+    -fx-text-secondary: #4a5568;
+    -fx-text-muted: #718096;
+    -fx-text-white: #ffffff;
+    -fx-text-light: #e2e8f0;
+    
+    /* 边框和分割线 */
+    -fx-border-light: #e2e8f0;
+    -fx-border-medium: #cbd5e0;
+    -fx-border-dark: #a0aec0;
+    
+    /* 阴影 - 柔和深度 */
+    -fx-shadow-sm: rgba(0, 0, 0, 0.05);
+    -fx-shadow-md: rgba(0, 0, 0, 0.1);
+    -fx-shadow-lg: rgba(0, 0, 0, 0.15);
+    -fx-shadow-xl: rgba(0, 0, 0, 0.25);
+    
+    /* 状态色 */
+    -fx-success: #48bb78;
+    -fx-warning: #ed8936;
+    -fx-error: #f56565;
+    -fx-info: #4299e1;
+}
+
+/* 全局字体和基础样式 */
+.root {
+    -fx-font-family: "Segoe UI", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
+    -fx-font-size: 14px;
+}
+
+/* 主容器 */
+.main-container {
+    -fx-background-color: -fx-bg-card;
+}
+
+/* 侧边栏 - 现代化设计 */
+.sidebar {
+    -fx-background-color: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 0 1 0 0;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 0, 0, 1, 0);
+}
+
+.app-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-text-primary;
+    -fx-padding: 16 0 24 0;
+    -fx-letter-spacing: -0.5px;
+}
+
+.user-info {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 12;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 8, 0, 0, 2);
+    -fx-padding: 16;
+}
+
+.username-label {
+    -fx-font-size: 15px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-text-primary;
+}
+
+.status-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-success;
+    -fx-font-weight: 500;
+}
+
+/* 导航按钮 - 现代扁平设计 */
+.nav-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -fx-text-secondary;
+    -fx-font-size: 14px;
+    -fx-font-weight: 500;
+    -fx-padding: 12 16;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-cursor: hand;
+    -fx-transition: all 0.2s ease;
+}
+
+.nav-button:hover {
+    -fx-background-color: -fx-bg-hover;
+    -fx-text-fill: -fx-text-primary;
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+}
+
+.nav-button:pressed {
+    -fx-background-color: -fx-bg-active;
+    -fx-scale-x: 0.98;
+    -fx-scale-y: 0.98;
+}
+
+.connection-status {
+    -fx-background-color: -fx-bg-hover;
+    -fx-text-fill: -fx-text-muted;
+    -fx-font-size: 11px;
+    -fx-font-weight: 500;
+    -fx-padding: 8 12;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+}
+
+/* 主内容区域 */
+.main-content {
+    -fx-background-color: -fx-bg-card;
+}
+
+.content-panel {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 16;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 16;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-md, 16, 0, 0, 4);
+}
+
+.page-title {
+    -fx-font-size: 28px;
+    -fx-font-weight: 700;
+    -fx-text-fill: -fx-text-primary;
+    -fx-letter-spacing: -0.8px;
+}
+
+/* 日记面板 - 卡片式设计 */
+.diary-panel {
+    -fx-background-color: -fx-bg-card;
+}
+
+.diary-split-pane {
+    -fx-background-color: transparent;
+}
+
+.diary-list-section {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 12;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+}
+
+.diary-edit-section {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 12;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+}
+
+.section-label {
+    -fx-font-size: 18px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-text-primary;
+    -fx-letter-spacing: -0.3px;
+}
+
+.search-section {
+    -fx-background-color: #f8fafc;
+    -fx-background-radius: 8;
+    -fx-padding: 12;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+}
+
+.search-field, .date-picker {
+    -fx-background-color: -fx-bg-card;
+    -fx-border-color: -fx-border-medium;
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 12;
+    -fx-font-size: 13px;
+}
+
+.search-field:focused, .date-picker:focused {
+    -fx-border-color: -fx-primary-blue;
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 226, 0.25), 4, 0, 0, 0);
+}
+
+.search-button {
+    -fx-background-color: -fx-primary-blue;
+    -fx-text-fill: -fx-text-white;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 8 16;
+    -fx-font-weight: 500;
+    -fx-cursor: hand;
+}
+
+.search-button:hover {
+    -fx-background-color: -fx-accent-blue;
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 226, 0.3), 8, 0, 0, 2);
+}
+
+/* 日记列表 - 现代卡片设计 */
+.diary-list {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.diary-item {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 8;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 4, 0, 0, 1);
+    -fx-cursor: hand;
+    -fx-padding: 16;
+    -fx-spacing: 12;
+}
+
+.diary-item:hover {
+    -fx-effect: dropshadow(gaussian, -fx-shadow-md, 12, 0, 0, 4);
+    -fx-scale-x: 1.01;
+    -fx-scale-y: 1.01;
+    -fx-border-color: -fx-border-medium;
+}
+
+.diary-date {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-text-muted;
+    -fx-font-weight: 500;
+}
+
+.diary-mood {
+    -fx-font-size: 13px;
+    -fx-background-color: #e6f3ff;
+    -fx-text-fill: -fx-primary-blue;
+    -fx-background-radius: 12;
+    -fx-padding: 4 8;
+    -fx-font-weight: 500;
+}
+
+.diary-preview {
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-secondary;
+    -fx-line-spacing: 2px;
+}
+
+.diary-preview-expanded {
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-secondary;
+    -fx-line-spacing: 2px;
+    -fx-wrap-text: true;
+}
+
+/* 日记编辑区域 */
+.field-label {
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-text-primary;
+}
+
+.mood-selector {
+    -fx-background-color: -fx-bg-card;
+    -fx-border-color: -fx-border-medium;
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 12;
+}
+
+.diary-content-area {
+    -fx-background-color: -fx-bg-card;
+    -fx-border-color: -fx-border-medium;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 16;
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-primary;
+    -fx-line-spacing: 2px;
+}
+
+.diary-content-area:focused {
+    -fx-border-color: -fx-primary-blue;
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 226, 0.15), 8, 0, 0, 0);
+}
+
+.save-button {
+    -fx-background-color: linear-gradient(to right, -fx-primary-blue, -fx-accent-teal);
+    -fx-text-fill: -fx-text-white;
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-padding: 12 24;
+    -fx-cursor: hand;
+}
+
+.save-button:hover {
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 226, 0.4), 12, 0, 0, 4);
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+}
+
+.clear-button {
+    -fx-background-color: -fx-bg-hover;
+    -fx-text-fill: -fx-text-secondary;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 8 16;
+    -fx-cursor: hand;
+    -fx-font-weight: 500;
+}
+
+.clear-button:hover {
+    -fx-background-color: -fx-bg-active;
+    -fx-text-fill: -fx-text-primary;
+}
+
+/* 聊天面板 */
+.chat-panel {
+    -fx-background-color: -fx-bg-card;
+}
+
+.chat-split-pane {
+    -fx-background-color: transparent;
+}
+
+.users-section {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 12;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+}
+
+.users-list {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.user-item {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 8;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-cursor: hand;
+    -fx-padding: 12;
+}
+
+.user-item:hover {
+    -fx-background-color: -fx-bg-hover;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 6, 0, 0, 2);
+}
+
+.selected-user {
+    -fx-background-color: #e6f3ff !important;
+    -fx-border-color: -fx-primary-blue !important;
+}
+
+.selected-user .user-name {
+    -fx-text-fill: -fx-primary-blue !important;
+    -fx-font-weight: 600 !important;
+}
+
+.user-avatar {
+    -fx-fill: -fx-primary-blue;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 3, 0, 0, 1);
+}
+
+.avatar-text, .avatar-text-small {
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-text-white;
+}
+
+.user-name {
+    -fx-font-size: 14px;
+    -fx-font-weight: 500;
+    -fx-text-fill: -fx-text-primary;
+}
+
+.user-status {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-success;
+    -fx-font-weight: 500;
+}
+
+/* 聊天区域 */
+.chat-section {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 12;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+}
+
+.chat-scroll-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.chat-messages {
+    -fx-background-color: #fafbfc;
+    -fx-background-radius: 8;
+    -fx-padding: 16;
+}
+
+.message-box {
+    -fx-padding: 8;
+}
+
+.message-bubble {
+    -fx-background-radius: 16;
+    -fx-border-radius: 16;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 4, 0, 0, 2);
+    -fx-padding: 12 16;
+}
+
+.my-bubble {
+    -fx-background-color: -fx-primary-blue;
+}
+
+.their-bubble {
+    -fx-background-color: -fx-bg-card;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+}
+
+.sender-name {
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+    -fx-text-fill: rgba(255, 255, 255, 0.8);
+}
+
+.message-content {
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-white;
+    -fx-wrap-text: true;
+    -fx-line-spacing: 1px;
+}
+
+.their-bubble .message-content {
+    -fx-text-fill: -fx-text-primary;
+}
+
+.message-time {
+    -fx-font-size: 10px;
+    -fx-text-fill: rgba(255, 255, 255, 0.6);
+    -fx-alignment: center-right;
+}
+
+.their-bubble .message-time {
+    -fx-text-fill: -fx-text-muted;
+}
+
+.message-avatar {
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 2, 0, 0, 1);
+}
+
+/* 消息输入区域 */
+.message-input-section {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 24;
+    -fx-border-color: -fx-border-medium;
+    -fx-border-width: 1;
+    -fx-border-radius: 24;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 6, 0, 0, 2);
+    -fx-padding: 8 16;
+}
+
+.message-input {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-primary;
+    -fx-prompt-text-fill: -fx-text-muted;
+}
+
+.send-button {
+    -fx-background-color: -fx-primary-blue;
+    -fx-text-fill: -fx-text-white;
+    -fx-font-weight: 600;
+    -fx-background-radius: 16;
+    -fx-border-radius: 16;
+    -fx-padding: 8 16;
+    -fx-cursor: hand;
+}
+
+.send-button:hover {
+    -fx-background-color: -fx-accent-blue;
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 226, 0.3), 8, 0, 0, 2);
+}
+
+.send-button:disabled {
+    -fx-background-color: -fx-bg-active;
+    -fx-text-fill: -fx-text-muted;
+    -fx-opacity: 0.6;
+}
+
+/* 聊天记录面板 */
+.logs-panel {
+    -fx-background-color: -fx-bg-card;
+}
+
+.logs-scroll-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.logs-container {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 8;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+}
+
+.log-entry {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 8;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 3, 0, 0, 1);
+    -fx-padding: 16;
+}
+
+.log-entry:hover {
+    -fx-effect: dropshadow(gaussian, -fx-shadow-md, 8, 0, 0, 2);
+}
+
+.log-sender {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-primary-blue;
+}
+
+.log-receiver {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-accent-teal;
+}
+
+.log-time {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-text-muted;
+    -fx-font-weight: 500;
+}
+
+.log-content {
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-primary;
+    -fx-wrap-text: true;
+    -fx-line-spacing: 2px;
+}
+
+/* 按钮样式 - 现代化设计 */
+.refresh-button {
+    -fx-background-color: -fx-success;
+    -fx-text-fill: -fx-text-white;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 8 16;
+    -fx-cursor: hand;
+    -fx-font-weight: 500;
+}
+
+.refresh-button:hover {
+    -fx-background-color: derive(-fx-success, -10%);
+    -fx-effect: dropshadow(gaussian, rgba(72, 187, 120, 0.3), 8, 0, 0, 2);
+}
+
+.export-button {
+    -fx-background-color: -fx-info;
+    -fx-text-fill: -fx-text-white;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 8 16;
+    -fx-cursor: hand;
+    -fx-font-weight: 500;
+}
+
+.export-button:hover {
+    -fx-background-color: derive(-fx-info, -10%);
+    -fx-effect: dropshadow(gaussian, rgba(66, 153, 225, 0.3), 8, 0, 0, 2);
+}
+
+.delete-button, .delete-button-small {
+    -fx-background-color: -fx-error;
+    -fx-text-fill: -fx-text-white;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 6 12;
+    -fx-cursor: hand;
+    -fx-font-weight: 500;
+    -fx-font-size: 12px;
+}
+
+.delete-button:hover, .delete-button-small:hover {
+    -fx-background-color: derive(-fx-error, -10%);
+    -fx-effect: dropshadow(gaussian, rgba(245, 101, 101, 0.3), 6, 0, 0, 2);
+}
+
+.edit-button-small {
+    -fx-background-color: -fx-warning;
+    -fx-text-fill: -fx-text-white;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 6 12;
+    -fx-cursor: hand;
+    -fx-font-weight: 500;
+    -fx-font-size: 12px;
+}
+
+.edit-button-small:hover {
+    -fx-background-color: derive(-fx-warning, -10%);
+    -fx-effect: dropshadow(gaussian, rgba(237, 137, 54, 0.3), 6, 0, 0, 2);
+}
+
+/* 展开/收缩按钮 */
+.expand-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -fx-primary-blue;
+    -fx-border-color: -fx-primary-blue;
+    -fx-border-width: 1;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 4 8;
+    -fx-cursor: hand;
+    -fx-font-size: 11px;
+    -fx-font-weight: 500;
+}
+
+.expand-button:hover {
+    -fx-background-color: -fx-primary-blue;
+    -fx-text-fill: -fx-text-white;
+}
+
+/* 信息标签 */
+.info-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-text-muted;
+    -fx-font-style: italic;
+}
+
+.sync-status {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-success;
+    -fx-font-weight: 600;
+}
+
+.chat-peer-label {
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-primary-blue;
+    -fx-font-weight: 600;
+}
+
+.connection-indicator {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-success;
+    -fx-background-color: rgba(72, 187, 120, 0.1);
+    -fx-background-radius: 8;
+    -fx-padding: 6 12;
+    -fx-font-weight: 500;
+}
+
+.no-logs-label, .no-results-label {
+    -fx-font-size: 16px;
+    -fx-text-fill: -fx-text-muted;
+    -fx-font-style: italic;
+    -fx-padding: 40;
+}
+
+/* 对话框美化 */
+.dialog-pane {
+    -fx-background-color: -fx-bg-card;
+    -fx-border-color: -fx-border-medium;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-xl, 24, 0, 0, 8);
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: -fx-bg-card;
+    -fx-text-fill: -fx-text-primary;
+    -fx-font-weight: 600;
+}
+
+.dialog-pane .button-bar .button {
+    -fx-background-color: -fx-primary-blue;
+    -fx-text-fill: -fx-text-white;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-font-weight: 500;
+}
+
+.dialog-pane .button-bar .button:hover {
+    -fx-background-color: -fx-accent-blue;
+}
+
+/* 滚动条美化 */
+.scroll-bar {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar .track {
+    -fx-background-color: -fx-bg-hover;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: -fx-border-medium;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: -fx-border-dark;
+}
+
+/* 动画效果 */
+.fade-in {
+    -fx-opacity: 0;
+}
+
+.scale-in {
+    -fx-scale-x: 0.95;
+    -fx-scale-y: 0.95;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+    .page-title {
+        -fx-font-size: 24px;
+    }
+    
+    .nav-button {
+        -fx-font-size: 13px;
+        -fx-padding: 10 14;
+    }
+}
+
+/* 长文本处理 */
+.diary-content-preview {
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-secondary;
+    -fx-line-spacing: 2px;
+    -fx-wrap-text: true;
+}
+
+.diary-content-full {
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-secondary;
+    -fx-line-spacing: 3px;
+    -fx-wrap-text: true;
+}
+
+/* 加载状态 */
+.loading-indicator {
+    -fx-progress-color: -fx-primary-blue;
+}
+
+/* 工具提示 */
+.tooltip {
+    -fx-background-color: -fx-primary-dark;
+    -fx-text-fill: -fx-text-white;
+    -fx-background-radius: 4;
+    -fx-font-size: 11px;
+    -fx-padding: 4 8;
+}
+
+/* 字数统计标签 */
+.char-count-label {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-text-muted;
+    -fx-font-weight: 500;
+    -fx-padding: 4 0 0 0;
+}
+
+/* 日记分割线 */
+.diary-separator {
+    -fx-background-color: -fx-border-light;
+    -fx-pref-height: 1;
+    -fx-max-height: 1;
+}
+
+/* 改进的消息气泡样式 */
+.message-bubble {
+    -fx-padding: 12 16;
+    -fx-background-radius: 18 18 18 4;
+}
+
+.my-bubble {
+    -fx-background-radius: 18 4 18 18;
+}
+
+/* 消息发送状态 */
+.message-status {
+    -fx-font-size: 10px;
+    -fx-text-fill: -fx-text-muted;
+    -fx-font-style: italic;
+}
+
+/* 在线状态指示器 */
+.online-indicator {
+    -fx-background-color: -fx-success;
+    -fx-background-radius: 50%;
+    -fx-pref-width: 8;
+    -fx-pref-height: 8;
+    -fx-max-width: 8;
+    -fx-max-height: 8;
+}
+
+/* 优化的按钮组 */
+.button-group {
+    -fx-spacing: 8;
+}
+
+.button-group .button {
+    -fx-min-width: 80;
+}
+
+/* 加载动画 */
+.loading-spinner {
+    -fx-progress-color: -fx-primary-blue;
+    -fx-pref-width: 20;
+    -fx-pref-height: 20;
+}
+
+/* 空状态样式 */
+.empty-state {
+    -fx-alignment: center;
+    -fx-spacing: 16;
+    -fx-padding: 40;
+}
+
+.empty-state-icon {
+    -fx-font-size: 48px;
+    -fx-text-fill: -fx-text-muted;
+}
+
+.empty-state-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-text-secondary;
+}
+
+.empty-state-description {
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-muted;
+    -fx-text-alignment: center;
+    -fx-wrap-text: true;
+}
+
+/* 高级动画效果 */
+.smooth-transition {
+    -fx-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 焦点样式 */
+.text-input:focused {
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 226, 0.25), 8, 0, 0, 0);
+}
+
+/* 成功/错误状态 */
+.success-state {
+    -fx-border-color: -fx-success;
+    -fx-effect: dropshadow(gaussian, rgba(72, 187, 120, 0.25), 4, 0, 0, 0);
+}
+
+.error-state {
+    -fx-border-color: -fx-error;
+    -fx-effect: dropshadow(gaussian, rgba(245, 101, 101, 0.25), 4, 0, 0, 0);
+}
+
+/* ========== 现代UI组件库样式 ========== */
+
+/* Material Design 按钮样式 */
+.mfx-button {
+    -fx-background-color: -fx-primary-blue;
+    -fx-text-fill: white;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-font-size: 14px;
+    -fx-font-weight: 500;
+    -fx-padding: 10 24;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 2, 0, 0, 2);
+}
+
+.mfx-button:hover {
+    -fx-background-color: -fx-accent-blue;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 4, 0, 0, 4);
+}
+
+.mfx-button:pressed {
+    -fx-background-color: derive(-fx-accent-blue, -10%);
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 1, 0, 0, 1);
+}
+
+/* Material Design 文本框样式 */
+.mfx-text-field {
+    -fx-background-color: transparent;
+    -fx-border-color: -fx-border-medium;
+    -fx-border-width: 0 0 2 0;
+    -fx-font-size: 14px;
+    -fx-padding: 8 0;
+}
+
+.mfx-text-field:focused {
+    -fx-border-color: -fx-primary-blue;
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 226, 0.25), 4, 0, 0, 0);
+}
+
+/* 搜索框样式 */
+.custom-text-field {
+    -fx-background-color: -fx-bg-hover;
+    -fx-border-color: -fx-border-light;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 12;
+    -fx-font-size: 14px;
+}
+
+.custom-text-field:focused {
+    -fx-border-color: -fx-primary-blue;
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 226, 0.15), 4, 0, 0, 0);
+}
+
+/* 卡片容器样式 */
+.modern-card {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-md, 10, 0, 0, 2);
+    -fx-padding: 20;
+}
+
+.modern-card .card-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-text-primary;
+}
+
+/* 头像样式 */
+.user-avatar {
+    -fx-background-radius: 20;
+    -fx-border-radius: 20;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-sm, 2, 0, 0, 1);
+}
+
+/* 图标按钮样式 */
+.icon-button {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 8;
+    -fx-background-radius: 4;
+    -fx-cursor: hand;
+}
+
+.icon-button:hover {
+    -fx-background-color: -fx-bg-hover;
+}
+
+.icon-button:pressed {
+    -fx-background-color: -fx-bg-active;
+}
+
+/* Material Design 进度条样式 */
+.mfx-progress-bar {
+    -fx-accent: -fx-primary-blue;
+    -fx-background-color: -fx-bg-hover;
+    -fx-background-radius: 3;
+}
+
+.mfx-progress-bar .bar {
+    -fx-background-color: -fx-primary-blue;
+    -fx-background-radius: 3;
+}
+
+/* Material Design 滑块样式 */
+.mfx-slider {
+    -fx-accent: -fx-primary-blue;
+}
+
+.mfx-slider .track {
+    -fx-background-color: -fx-border-light;
+    -fx-background-radius: 2;
+}
+
+.mfx-slider .thumb {
+    -fx-background-color: -fx-primary-blue;
+    -fx-background-radius: 10;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-md, 4, 0, 0, 2);
+}
+
+/* 现代化分隔线 */
+.styled-separator {
+    -fx-background-color: -fx-border-light;
+    -fx-pref-height: 1;
+}
+
+/* 现代化标签页 */
+.tab-pane {
+    -fx-tab-min-height: 40;
+    -fx-tab-max-height: 40;
+}
+
+.tab-pane .tab-header-area {
+    -fx-background-color: -fx-bg-card;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 0 0 1 0;
+}
+
+.tab-pane .tab {
+    -fx-background-color: transparent;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-padding: 8 16;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: -fx-bg-hover;
+    -fx-border-color: -fx-primary-blue;
+    -fx-border-width: 0 0 2 0;
+}
+
+.tab-pane .tab .tab-label {
+    -fx-text-fill: -fx-text-secondary;
+    -fx-font-weight: 500;
+}
+
+.tab-pane .tab:selected .tab-label {
+    -fx-text-fill: -fx-primary-blue;
+}
+
+/* 现代化菜单栏 */
+.menu-bar {
+    -fx-background-color: -fx-bg-card;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 0 0 1 0;
+}
+
+.menu-bar .menu {
+    -fx-padding: 8 12;
+}
+
+.menu-bar .menu .label {
+    -fx-text-fill: -fx-text-secondary;
+    -fx-font-weight: 500;
+}
+
+/* 通知样式 */
+.notification {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-lg, 12, 0, 0, 4);
+    -fx-padding: 16;
+    -fx-spacing: 8;
+}
+
+.notification .notification-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -fx-text-primary;
+}
+
+.notification .notification-message {
+    -fx-font-size: 13px;
+    -fx-text-fill: -fx-text-secondary;
+    -fx-wrap-text: true;
+}
+
+/* PopOver样式 */
+.popover {
+    -fx-background-color: -fx-bg-card;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-lg, 12, 0, 0, 4);
+}
+
+.popover .popover-content {
+    -fx-padding: 16;
+}
+
+/* 响应式设计 */
+@media (max-width: 800px) {
+    .modern-card {
+        -fx-padding: 16;
+    }
+    
+    .mfx-button {
+        -fx-padding: 8 16;
+        -fx-font-size: 13px;
+    }
+}
+
+/* 深色模式支持 */
+.root.dark-mode {
+    -fx-bg-card: -fx-bg-secondary;
+    -fx-text-primary: -fx-text-light;
+    -fx-text-secondary: -fx-text-white;
+}
+
+.dark-mode .modern-card {
+    -fx-background-color: -fx-bg-secondary;
+}
+
+.dark-mode .notification {
+    -fx-background-color: -fx-bg-secondary;
+}
+
+.dark-mode .popover {
+    -fx-background-color: -fx-bg-secondary;
+}
