@@ -35,4 +35,18 @@ build/
 .vscode/
 
 ### Mac OS ###
-.DS_Store
+.DS_Store# 运行时文件
+服务端/api/logs/
+服务端/api/api_server.log
+服务端/chat-server/chat_server.log
+服务端/db/messages.db
+*.log
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# PM2
+.pm2/
