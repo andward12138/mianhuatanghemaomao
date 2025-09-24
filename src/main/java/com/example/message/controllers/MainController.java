@@ -29,6 +29,7 @@ public class MainController {
     private DiaryController diaryController;
     private ChatController chatController;
     private LogsController logsController;
+    private AnniversaryController anniversaryController;
     
     public MainController() {
         initializeControllers();
@@ -39,6 +40,7 @@ public class MainController {
         diaryController = new DiaryController();
         chatController = new ChatController();
         logsController = new LogsController();
+        anniversaryController = new AnniversaryController();
     }
     
     private void setupEventListeners() {
@@ -152,10 +154,11 @@ public class MainController {
         navigation.setAlignment(Pos.CENTER);
         
         Button diaryButton = createNavButton("💝 心情日记", Router.Page.DIARY);
+        Button anniversaryButton = createNavButton("💕 纪念日", Router.Page.ANNIVERSARY);
         Button chatButton = createNavButton("💬 消息聊天", Router.Page.CHAT);
         Button logsButton = createNavButton("📖 聊天记录", Router.Page.LOGS);
         
-        navigation.getChildren().addAll(diaryButton, chatButton, logsButton);
+        navigation.getChildren().addAll(diaryButton, anniversaryButton, chatButton, logsButton);
         return navigation;
     }
     
@@ -186,6 +189,7 @@ public class MainController {
     
     private void registerPages() {
         router.registerPage(Router.Page.DIARY, () -> diaryController.createDiaryView());
+        router.registerPage(Router.Page.ANNIVERSARY, () -> anniversaryController.createAnniversaryView());
         router.registerPage(Router.Page.CHAT, () -> chatController.createChatView());
         router.registerPage(Router.Page.LOGS, () -> logsController.createLogsView());
     }

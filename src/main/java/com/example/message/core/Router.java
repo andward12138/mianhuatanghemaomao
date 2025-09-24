@@ -13,6 +13,7 @@ public class Router {
     
     public enum Page {
         DIARY("diary", "心情日记"),
+        ANNIVERSARY("anniversary", "纪念日"),
         CHAT("chat", "消息聊天"), 
         LOGS("logs", "聊天记录"),
         SETTINGS("settings", "设置");

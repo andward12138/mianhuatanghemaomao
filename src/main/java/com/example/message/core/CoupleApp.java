@@ -4,6 +4,7 @@ import com.example.message.controllers.MainController;
 import com.example.message.services.ApiService;
 import com.example.message.services.ChatService;
 import com.example.message.services.DiaryService;
+import com.example.message.services.ReminderService;
 import com.example.message.util.DBUtil;
 import javafx.application.Application;
 import javafx.scene.Scene;
@@ -50,6 +51,9 @@ public class CoupleApp extends Application {
         // 设置消息接收回调
         ChatService.setMessageReceivedCallback(mainController::handleReceivedMessage);
         
+        // 启动提醒服务
+        ReminderService.start();
+        
         System.out.println("应用初始化完成");
     }
     
@@ -61,6 +65,7 @@ public class CoupleApp extends Application {
         // 应用关闭时清理资源
         primaryStage.setOnCloseRequest(e -> {
             ChatService.stopServer();
+            ReminderService.stop();
             System.out.println("应用已关闭");
         });
     }

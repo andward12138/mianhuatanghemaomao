@@ -43,6 +43,20 @@ db.serialize(() => {
     user TEXT NOT NULL,
     message TEXT NOT NULL
   )`);
+
+  // 创建纪念日表
+  db.run(`CREATE TABLE IF NOT EXISTS anniversaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    date TEXT NOT NULL,
+    description TEXT,
+    photos TEXT,
+    is_recurring BOOLEAN DEFAULT 0,
+    reminder_days INTEGER DEFAULT 1,
+    category TEXT DEFAULT 'love',
+    created_by TEXT NOT NULL,
+    create_time TEXT NOT NULL
+  )`);
 });
 
 // 获取所有消息或两个用户之间的消息
@@ -337,6 +351,166 @@ app.get('/api/logs', (req, res) => {
       return res.status(500).json({ error: '获取日志失败' });
     }
     res.json(rows);
+  });
+});
+
+// ===== 纪念日相关API路由 =====
+
+// 获取所有纪念日
+app.get('/api/anniversaries', (req, res) => {
+  const { user } = req.query;
+  
+  let sql = 'SELECT * FROM anniversaries';
+  let params = [];
+  
+  if (user) {
+    sql += ' WHERE created_by = ?';
+    params.push(user);
+  }
+  
+  sql += ' ORDER BY date ASC';
+  
+  db.all(sql, params, (err, rows) => {
+    if (err) {
+      console.error('获取纪念日错误:', err);
+      return res.status(500).json({ error: '获取纪念日失败' });
+    }
+    res.json(rows);
+  });
+});
+
+// 创建新纪念日
+app.post('/api/anniversaries', (req, res) => {
+  const { title, date, description, photos, is_recurring, reminder_days, category, created_by } = req.body;
+  
+  console.log('收到纪念日:', req.body);
+
+  if (!title || !date || !created_by) {
+    return res.status(400).json({ error: '纪念日数据不完整' });
+  }
+
+  const create_time = new Date().toISOString();
+
+  db.run(
+    'INSERT INTO anniversaries (title, date, description, photos, is_recurring, reminder_days, category, created_by, create_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [title, date, description || '', photos || '', is_recurring || 0, reminder_days || 1, category || 'love', created_by, create_time],
+    function (err) {
+      if (err) {
+        console.error('纪念日存储错误:', err);
+        return res.status(500).json({ error: '存储纪念日失败' });
+      }
+
+      console.log('纪念日已存储，ID:', this.lastID);
+      res.status(201).json({
+        id: this.lastID,
+        title,
+        date,
+        description: description || '',
+        photos: photos || '',
+        is_recurring: is_recurring || 0,
+        reminder_days: reminder_days || 1,
+        category: category || 'love',
+        created_by,
+        create_time
+      });
+    }
+  );
+});
+
+// 更新纪念日
+app.put('/api/anniversaries/:id', (req, res) => {
+  const { title, date, description, photos, is_recurring, reminder_days, category } = req.body;
+  const { id } = req.params;
+  
+  if (!title || !date) {
+    return res.status(400).json({ error: '纪念日标题和日期不能为空' });
+  }
+  
+  db.run(
+    'UPDATE anniversaries SET title = ?, date = ?, description = ?, photos = ?, is_recurring = ?, reminder_days = ?, category = ? WHERE id = ?',
+    [title, date, description || '', photos || '', is_recurring || 0, reminder_days || 1, category || 'love', id],
+    function (err) {
+      if (err) {
+        console.error('更新纪念日错误:', err);
+        return res.status(500).json({ error: '更新纪念日失败' });
+      }
+      
+      if (this.changes === 0) {
+        return res.status(404).json({ error: '未找到指定ID的纪念日' });
+      }
+      
+      console.log('纪念日已更新, ID:', id);
+      res.json({
+        id: parseInt(id),
+        title,
+        date,
+        description: description || '',
+        photos: photos || '',
+        is_recurring: is_recurring || 0,
+        reminder_days: reminder_days || 1,
+        category: category || 'love',
+        changes: this.changes
+      });
+    }
+  );
+});
+
+// 删除纪念日
+app.delete('/api/anniversaries/:id', (req, res) => {
+  const { id } = req.params;
+  
+  db.run('DELETE FROM anniversaries WHERE id = ?', [id], function (err) {
+    if (err) {
+      console.error('删除纪念日错误:', err);
+      return res.status(500).json({ error: '删除纪念日失败' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: '未找到指定ID的纪念日' });
+    }
+    
+    console.log('纪念日已删除, ID:', id);
+    res.json({ deleted: true, changes: this.changes });
+  });
+});
+
+// 获取即将到来的纪念日（用于提醒）
+app.get('/api/anniversaries/upcoming', (req, res) => {
+  const { user, days } = req.query;
+  const reminderDays = parseInt(days) || 7; // 默认7天内的纪念日
+  
+  let sql = 'SELECT * FROM anniversaries';
+  let params = [];
+  
+  if (user) {
+    sql += ' WHERE created_by = ?';
+    params.push(user);
+  }
+  
+  db.all(sql, params, (err, rows) => {
+    if (err) {
+      console.error('获取即将到来的纪念日错误:', err);
+      return res.status(500).json({ error: '获取纪念日失败' });
+    }
+    
+    // 在JavaScript中过滤即将到来的纪念日
+    const today = new Date();
+    const upcomingAnniversaries = rows.filter(anniversary => {
+      const anniversaryDate = new Date(anniversary.date);
+      const currentYearDate = new Date(today.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
+      
+      // 如果今年的纪念日已过且是重复的，检查明年的
+      if (currentYearDate < today && anniversary.is_recurring) {
+        currentYearDate.setFullYear(today.getFullYear() + 1);
+      }
+      
+      const diffTime = currentYearDate - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      return diffDays >= 0 && diffDays <= reminderDays;
+    });
+    
+    res.json(upcomingAnniversaries);
   });
 });
 

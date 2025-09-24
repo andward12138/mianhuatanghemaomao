@@ -173,6 +173,26 @@ public class ModernUIComponents {
             .showError();
     }
     
+    // 显示信息通知
+    public static void showInfoNotification(String message) {
+        Notifications.create()
+            .title("提醒")
+            .text(message)
+            .hideAfter(Duration.seconds(4))
+            .position(Pos.TOP_RIGHT)
+            .showInformation();
+    }
+    
+    // 显示特殊通知（用于纪念日等重要事件）
+    public static void showSpecialNotification(String message) {
+        Notifications.create()
+            .title("🎉 特殊提醒")
+            .text(message)
+            .hideAfter(Duration.seconds(8))
+            .position(Pos.TOP_CENTER)
+            .showConfirm();
+    }
+    
     // 创建弹出窗口
     public static PopOver createPopOver(String title, Node content) {
         PopOver popOver = new PopOver();

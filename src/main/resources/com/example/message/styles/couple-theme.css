@@ -655,6 +655,203 @@
     -fx-scale-y: 0.8;
 }
 
+/* 纪念日面板样式 */
+.anniversary-panel {
+    -fx-background-color: linear-gradient(to bottom right, -fx-light-pink, -fx-warm-white);
+}
+
+.anniversary-split-pane {
+    -fx-background-color: transparent;
+}
+
+.anniversary-list-section {
+    -fx-background-color: -fx-warm-white;
+    -fx-background-radius: 15;
+    -fx-border-color: -fx-primary-pink;
+    -fx-border-width: 1;
+    -fx-border-radius: 15;
+}
+
+.anniversary-edit-section {
+    -fx-background-color: -fx-warm-white;
+    -fx-background-radius: 15;
+    -fx-border-color: -fx-primary-blue;
+    -fx-border-width: 1;
+    -fx-border-radius: 15;
+}
+
+.anniversary-scroll-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.anniversary-list {
+    -fx-background-color: transparent;
+    -fx-padding: 5;
+}
+
+/* 纪念日卡片样式 */
+.anniversary-card {
+    -fx-background-color: -fx-text-white;
+    -fx-background-radius: 12;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-light, 5, 0, 0, 2);
+    -fx-cursor: hand;
+}
+
+.anniversary-card:hover {
+    -fx-background-color: -fx-light-pink;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 8, 0, 0, 3);
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+}
+
+.anniversary-card-today {
+    -fx-background-color: linear-gradient(to right, -fx-light-pink, -fx-light-blue);
+    -fx-border-color: -fx-accent-pink;
+    -fx-border-width: 2;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 12, 0, 0, 4);
+}
+
+.anniversary-card-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-dark;
+}
+
+.anniversary-countdown {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-accent-pink;
+    -fx-background-color: -fx-light-pink;
+    -fx-background-radius: 15;
+    -fx-padding: 5 10;
+}
+
+.anniversary-today {
+    -fx-text-fill: -fx-text-white;
+    -fx-background-color: -fx-accent-pink;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 8, 0, 0, 2);
+}
+
+.anniversary-card-date {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-text-light;
+}
+
+.anniversary-card-description {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-text-light;
+    -fx-font-style: italic;
+}
+
+.anniversary-action-btn {
+    -fx-background-color: -fx-soft-gray;
+    -fx-text-fill: -fx-text-dark;
+    -fx-background-radius: 15;
+    -fx-border-radius: 15;
+    -fx-padding: 5;
+    -fx-min-width: 25;
+    -fx-min-height: 25;
+    -fx-cursor: hand;
+}
+
+.anniversary-action-btn:hover {
+    -fx-background-color: -fx-primary-pink;
+    -fx-text-fill: -fx-text-white;
+}
+
+/* 纪念日编辑表单样式 */
+.anniversary-field, .anniversary-date-picker, .anniversary-category {
+    -fx-background-color: -fx-text-white;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 8;
+}
+
+.anniversary-field:focused, .anniversary-date-picker:focused, .anniversary-category:focused {
+    -fx-border-color: -fx-accent-pink;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 8, 0, 0, 0);
+}
+
+.anniversary-description {
+    -fx-background-color: -fx-text-white;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 8;
+}
+
+.anniversary-description:focused {
+    -fx-border-color: -fx-accent-blue;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-blue, 8, 0, 0, 0);
+}
+
+.anniversary-checkbox {
+    -fx-text-fill: -fx-text-dark;
+    -fx-font-size: 14px;
+}
+
+.anniversary-spinner {
+    -fx-background-color: -fx-text-white;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
+    -fx-border-radius: 5;
+    -fx-background-radius: 5;
+}
+
+.field-label {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-dark;
+}
+
+.empty-anniversary-label {
+    -fx-font-size: 16px;
+    -fx-text-fill: -fx-text-light;
+    -fx-font-style: italic;
+    -fx-padding: 50;
+    -fx-text-alignment: center;
+}
+
+.today-anniversary-label {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-accent-pink;
+    -fx-padding: 5 10;
+    -fx-background-color: -fx-light-pink;
+    -fx-background-radius: 15;
+}
+
+.today-special {
+    -fx-text-fill: -fx-text-white;
+    -fx-background-color: -fx-accent-pink;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 10, 0, 0, 3);
+}
+
+/* 添加按钮样式 */
+.add-button {
+    -fx-background-color: linear-gradient(to right, -fx-primary-pink, -fx-primary-blue);
+    -fx-text-fill: -fx-text-white;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 20;
+    -fx-border-radius: 20;
+    -fx-padding: 8 20;
+    -fx-cursor: hand;
+}
+
+.add-button:hover {
+    -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 12, 0, 0, 3);
+    -fx-scale-x: 1.05;
+    -fx-scale-y: 1.05;
+}
+
 /* 响应式设计 */
 @media (max-width: 800px) {
     .page-title {
@@ -664,5 +861,13 @@
     .nav-button {
         -fx-font-size: 12px;
         -fx-padding: 10 15;
+    }
+    
+    .anniversary-card-title {
+        -fx-font-size: 14px;
+    }
+    
+    .anniversary-countdown {
+        -fx-font-size: 12px;
     }
 }

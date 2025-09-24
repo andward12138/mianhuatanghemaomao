@@ -85,6 +85,10 @@ public class EventBus {
         public static final String DIARY_SAVED = "diary.saved";
         public static final String DIARY_UPDATED = "diary.updated";
         public static final String DIARY_DELETED = "diary.deleted";
+        public static final String ANNIVERSARY_SAVED = "anniversary.saved";
+        public static final String ANNIVERSARY_UPDATED = "anniversary.updated";
+        public static final String ANNIVERSARY_DELETED = "anniversary.deleted";
+        public static final String ANNIVERSARY_REMINDER = "anniversary.reminder";
         public static final String THEME_CHANGED = "theme.changed";
         public static final String PAGE_CHANGED = "page.changed";
         public static final String CONNECTION_STATUS_CHANGED = "connection.status.changed";
