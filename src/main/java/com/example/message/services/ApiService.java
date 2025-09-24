@@ -23,7 +23,7 @@ import java.util.logging.Logger;
  */
 public class ApiService {
     private static final Logger logger = Logger.getLogger(ApiService.class.getName());
-    private static final String API_BASE_URL = "http://8.134.99.69:3000/api";
+    private static final String API_BASE_URL = "http://8.134.99.69:3001/api";
     private static final int CONNECT_TIMEOUT = 5000; // 5秒（减少超时时间）
     private static final int READ_TIMEOUT = 30000; // 30秒
     private static final int MAX_RETRIES = 3; // 最大重试次数
