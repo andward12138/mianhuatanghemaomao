@@ -434,20 +434,30 @@
     -fx-prompt-text-fill: -fx-text-light;
 }
 
-.send-button {
-    -fx-background-color: linear-gradient(to right, -fx-primary-pink, -fx-primary-blue);
-    -fx-text-fill: -fx-text-white;
-    -fx-font-weight: bold;
-    -fx-background-radius: 20;
-    -fx-border-radius: 20;
-    -fx-padding: 8 20;
-    -fx-cursor: hand;
+/* 发送按钮样式 - 高优先级 */
+.send-button,
+.send-button.mfx-button,
+.button.send-button {
+    -fx-background-color: linear-gradient(to right, #FF69B4 0%, #4169E1 100%) !important;
+    -fx-text-fill: white !important;
+    -fx-font-weight: bold !important;
+    -fx-font-size: 14px !important;
+    -fx-background-radius: 20 !important;
+    -fx-border-radius: 20 !important;
+    -fx-border-color: transparent !important;
+    -fx-border-width: 0 !important;
+    -fx-padding: 10 20 !important;
+    -fx-cursor: hand !important;
+    -fx-effect: dropshadow(gaussian, rgba(255, 105, 180, 0.5), 8, 0, 0, 2) !important;
 }
 
-.send-button:hover {
-    -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 10, 0, 0, 2);
-    -fx-scale-x: 1.05;
-    -fx-scale-y: 1.05;
+.send-button:hover,
+.send-button.mfx-button:hover,
+.button.send-button:hover {
+    -fx-background-color: linear-gradient(to right, #FF1493 0%, #0000FF 100%) !important;
+    -fx-effect: dropshadow(gaussian, rgba(255, 105, 180, 0.7), 12, 0, 0, 4) !important;
+    -fx-scale-x: 1.08 !important;
+    -fx-scale-y: 1.08 !important;
 }
 
 .send-button:disabled {
@@ -748,10 +758,12 @@
 }
 
 .anniversary-action-btn {
-    -fx-background-color: -fx-soft-gray;
+    -fx-background-color: #E0E0E0;
     -fx-text-fill: -fx-text-dark;
     -fx-background-radius: 15;
     -fx-border-radius: 15;
+    -fx-border-color: -fx-border-light;
+    -fx-border-width: 1;
     -fx-padding: 5;
     -fx-min-width: 25;
     -fx-min-height: 25;
@@ -761,6 +773,7 @@
 .anniversary-action-btn:hover {
     -fx-background-color: -fx-primary-pink;
     -fx-text-fill: -fx-text-white;
+    -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 5, 0, 0, 2);
 }
 
 /* 纪念日编辑表单样式 */
@@ -834,22 +847,30 @@
     -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 10, 0, 0, 3);
 }
 
-/* 添加按钮样式 */
-.add-button {
-    -fx-background-color: linear-gradient(to right, -fx-primary-pink, -fx-primary-blue);
-    -fx-text-fill: -fx-text-white;
-    -fx-font-size: 14px;
-    -fx-font-weight: bold;
-    -fx-background-radius: 20;
-    -fx-border-radius: 20;
-    -fx-padding: 8 20;
-    -fx-cursor: hand;
+/* 添加按钮样式 - 高优先级 */
+.add-button,
+.add-button.mfx-button,
+.button.add-button {
+    -fx-background-color: linear-gradient(to right, #32CD32 0%, #00CED1 100%) !important;
+    -fx-text-fill: white !important;
+    -fx-font-size: 14px !important;
+    -fx-font-weight: bold !important;
+    -fx-background-radius: 20 !important;
+    -fx-border-radius: 20 !important;
+    -fx-border-color: transparent !important;
+    -fx-border-width: 0 !important;
+    -fx-padding: 10 20 !important;
+    -fx-cursor: hand !important;
+    -fx-effect: dropshadow(gaussian, rgba(50, 205, 50, 0.5), 8, 0, 0, 2) !important;
 }
 
-.add-button:hover {
-    -fx-effect: dropshadow(gaussian, -fx-shadow-pink, 12, 0, 0, 3);
-    -fx-scale-x: 1.05;
-    -fx-scale-y: 1.05;
+.add-button:hover,
+.add-button.mfx-button:hover,
+.button.add-button:hover {
+    -fx-background-color: linear-gradient(to right, #228B22 0%, #008B8B 100%) !important;
+    -fx-effect: dropshadow(gaussian, rgba(50, 205, 50, 0.7), 12, 0, 0, 4) !important;
+    -fx-scale-x: 1.08 !important;
+    -fx-scale-y: 1.08 !important;
 }
 
 /* 响应式设计 */

@@ -306,6 +306,11 @@ public class ChatController {
         );
         sendButton.setText("💌 发送");
         sendButton.getStyleClass().addAll("send-button", "mfx-button");
+        // 强制设置内联样式
+        sendButton.setStyle("-fx-background-color: linear-gradient(to right, #FF69B4 0%, #4169E1 100%); " +
+                           "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 20; " +
+                           "-fx-border-radius: 20; -fx-padding: 10 20; " +
+                           "-fx-effect: dropshadow(gaussian, rgba(255, 105, 180, 0.5), 8, 0, 0, 2);");
         sendButton.setDisable(true);
         
         // 发送消息事件

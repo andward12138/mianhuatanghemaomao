@@ -127,6 +127,20 @@ public class AnniversaryController {
         );
         addButton.setText("✨ 添加纪念日");
         addButton.getStyleClass().addAll("add-button", "mfx-button");
+        // 使用和聊天发送按钮一样的样式
+        String buttonStyle = "-fx-background-color: linear-gradient(to right, #FF69B4 0%, #4169E1 100%); " +
+                             "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 20; " +
+                             "-fx-border-radius: 20; -fx-padding: 10 20; " +
+                             "-fx-effect: dropshadow(gaussian, rgba(255, 105, 180, 0.5), 8, 0, 0, 2);";
+        String buttonHoverStyle = "-fx-background-color: linear-gradient(to right, #FF1493 0%, #0000FF 100%); " +
+                                 "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 20; " +
+                                 "-fx-border-radius: 20; -fx-padding: 10 20; " +
+                                 "-fx-effect: dropshadow(gaussian, rgba(255, 105, 180, 0.8), 12, 0, 0, 4); " +
+                                 "-fx-scale-x: 1.05; -fx-scale-y: 1.05;";
+        
+        addButton.setStyle(buttonStyle);
+        addButton.setOnMouseEntered(e -> addButton.setStyle(buttonHoverStyle));
+        addButton.setOnMouseExited(e -> addButton.setStyle(buttonStyle));
         addButton.setOnAction(e -> clearEditForm());
         
         headerBox.getChildren().addAll(titleLabel, todayLabel, spacer, addButton);
@@ -248,6 +262,20 @@ public class AnniversaryController {
         );
         saveButton.setText("💾 保存");
         saveButton.getStyleClass().addAll("save-button", "mfx-button");
+        // 使用和聊天发送按钮一样的样式
+        String saveButtonStyle = "-fx-background-color: linear-gradient(to right, #FF69B4 0%, #4169E1 100%); " +
+                                 "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 20; " +
+                                 "-fx-border-radius: 20; -fx-padding: 10 20; " +
+                                 "-fx-effect: dropshadow(gaussian, rgba(255, 105, 180, 0.5), 8, 0, 0, 2);";
+        String saveButtonHoverStyle = "-fx-background-color: linear-gradient(to right, #FF1493 0%, #0000FF 100%); " +
+                                     "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 20; " +
+                                     "-fx-border-radius: 20; -fx-padding: 10 20; " +
+                                     "-fx-effect: dropshadow(gaussian, rgba(255, 105, 180, 0.8), 12, 0, 0, 4); " +
+                                     "-fx-scale-x: 1.05; -fx-scale-y: 1.05;";
+        
+        saveButton.setStyle(saveButtonStyle);
+        saveButton.setOnMouseEntered(e -> saveButton.setStyle(saveButtonHoverStyle));
+        saveButton.setOnMouseExited(e -> saveButton.setStyle(saveButtonStyle));
         saveButton.setOnAction(e -> saveAnniversary());
         
         clearButton = ModernUIComponents.createIconButton(
@@ -256,6 +284,20 @@ public class AnniversaryController {
         );
         clearButton.setText("🔄 清空");
         clearButton.getStyleClass().addAll("clear-button", "mfx-button");
+        // 使用和聊天发送按钮一样的样式
+        String clearButtonStyle = "-fx-background-color: linear-gradient(to right, #FF69B4 0%, #4169E1 100%); " +
+                                 "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 20; " +
+                                 "-fx-border-radius: 20; -fx-padding: 10 20; " +
+                                 "-fx-effect: dropshadow(gaussian, rgba(255, 105, 180, 0.5), 8, 0, 0, 2);";
+        String clearButtonHoverStyle = "-fx-background-color: linear-gradient(to right, #FF1493 0%, #0000FF 100%); " +
+                                      "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 20; " +
+                                      "-fx-border-radius: 20; -fx-padding: 10 20; " +
+                                      "-fx-effect: dropshadow(gaussian, rgba(255, 105, 180, 0.8), 12, 0, 0, 4); " +
+                                      "-fx-scale-x: 1.05; -fx-scale-y: 1.05;";
+        
+        clearButton.setStyle(clearButtonStyle);
+        clearButton.setOnMouseEntered(e -> clearButton.setStyle(clearButtonHoverStyle));
+        clearButton.setOnMouseExited(e -> clearButton.setStyle(clearButtonStyle));
         clearButton.setOnAction(e -> clearEditForm());
         
         buttonBox.getChildren().addAll(saveButton, clearButton);
